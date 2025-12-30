@@ -1,13 +1,14 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { NotFoundError, DatabaseError } = require('../utils/errors');
+const dbConnection = require('../config/database');
 
 class UserService {
   async createUser(userData) {
     const { email, name, password, role = 'USER' } = userData;
 
-    const existingUser = await prisma.user.findUnique({
+    const existingUser = await dbConnection.getClient().user.findUnique({
       where: { email },
     });
 
@@ -17,7 +18,7 @@ class UserService {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const user = await prisma.user.create({
+    const user = await dbConnection.getClient().user.create({
       data: {
         email,
         name,
@@ -37,7 +38,7 @@ class UserService {
   }
 
   async loginUser(email, password) {
-    const user = await prisma.user.findUnique({
+    const user = await dbConnection.getClient().user.findUnique({
       where: { email },
     });
 
@@ -69,7 +70,7 @@ class UserService {
   }
 
   async getUserById(userId) {
-    const user = await prisma.user.findUnique({
+    const user = await dbConnection.getClient().user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -100,7 +101,7 @@ class UserService {
     const skip = (page - 1) * limit;
 
     const [users, total] = await Promise.all([
-      prisma.user.findMany({
+      dbConnection.getClient().user.findMany({
         skip,
         take: limit,
         select: {
@@ -112,7 +113,7 @@ class UserService {
         },
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.user.count(),
+      dbConnection.getClient().user.count(),
     ]);
 
     return {
@@ -130,7 +131,7 @@ class UserService {
     const { name, email } = updateData;
 
     if (email) {
-      const existingUser = await prisma.user.findFirst({
+      const existingUser = await dbConnection.getClient().user.findFirst({
         where: {
           email,
           NOT: { id: userId },
@@ -142,7 +143,7 @@ class UserService {
       }
     }
 
-    const user = await prisma.user.update({
+    const user = await dbConnection.getClient().user.update({
       where: { id: userId },
       data: { name, email },
       select: {
@@ -157,8 +158,48 @@ class UserService {
     return user;
   }
 
+  async updateUserAvatar(userId, avatarUrl, avatarPath) {
+    const existingProfile = await dbConnection.getClient().profile.findUnique({
+      where: { userId },
+    });
+
+    if (existingProfile) {
+      const updatedProfile = await dbConnection.getClient().profile.update({
+        where: { userId },
+        data: { avatar: avatarUrl },
+        select: {
+          id: true,
+          userId: true,
+          bio: true,
+          avatar: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      return await this.getUserById(userId);
+    } else {
+      const newProfile = await dbConnection.getClient().profile.create({
+        data: {
+          userId,
+          avatar: avatarUrl,
+        },
+        select: {
+          id: true,
+          userId: true,
+          bio: true,
+          avatar: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      return await this.getUserById(userId);
+    }
+  }
+
   async deleteUser(userId) {
-    const user = await prisma.user.findUnique({
+    const user = await dbConnection.getClient().user.findUnique({
       where: { id: userId },
     });
 
@@ -166,7 +207,7 @@ class UserService {
       throw new Error('User not found');
     }
 
-    await prisma.user.delete({
+    await dbConnection.getClient().user.delete({
       where: { id: userId },
     });
 
