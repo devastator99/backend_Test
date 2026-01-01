@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - uploads:/var/www/uploads:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - app1
+      - app2
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  app1:
+    build:
+      context: .
+      target: development
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:password@db:5432/interview_db_dev
+      - JWT_SECRET=dev-jwt-secret-key
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - uploads:/app/uploads
+      - logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  app2:
+    build:
+      context: .
+      target: development
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:password@db:5432/interview_db_dev
+      - JWT_SECRET=dev-jwt-secret-key
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - uploads:/app/uploads
+      - logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=interview_db_dev
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - app-network
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+  uploads:
+  logs:
+
+networks:
+  app-network:
+    driver: bridge
