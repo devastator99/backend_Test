@@ -92,11 +92,13 @@ show_usage() {
     echo "  ./load-balancer-setup.sh setup              # Initial setup"
     echo "  ./load-balancer-setup.sh start-dev          # Start development (2 instances)"
     echo "  ./load-balancer-setup.sh start              # Start production (3 instances)"
+    echo "  ./load-balancer-setup.sh start-jwt          # Start with JWT authentication"
     echo "  ./load-balancer-setup.sh start-scaled       # Start with scaled instances"
     echo "  ./load-balancer-setup.sh status             # Show service status"
     echo "  ./load-balancer-setup.sh logs               # Show service logs"
     echo "  ./load-balancer-setup.sh stop               # Stop production services"
     echo "  ./load-balancer-setup.sh stop-dev           # Stop development services"
+    echo "  ./load-balancer-setup.sh stop-jwt           # Stop JWT services"
     echo "  ./load-balancer-setup.sh stop-scaled        # Stop scaled services"
     echo "  ./load-balancer-setup.sh restart            # Restart production services"
     echo "  ./load-balancer-setup.sh clean              # Clean up all resources"
@@ -105,18 +107,28 @@ show_usage() {
     echo "  Main API:        http://localhost"
     echo "  Health Check:    http://localhost/health"
     echo "  API Docs:        http://localhost/api"
-    echo "  Prometheus:      http://localhost:9090 (production only)"
-    echo "  Grafana:         http://localhost:3001 (production only)"
+    echo "  JWT Service:     http://localhost:3001/health (JWT only)"
+    echo "  Prometheus:      http://localhost:9090 (production/JWT only)"
+    echo "  Grafana:         http://localhost:3001 (production/JWT only)"
+    echo ""
+    echo "🔐 JWT Features:"
+    echo "  - Token validation at Nginx level"
+    echo "  - Role-based access control"
+    echo "  - Token blacklisting and refresh"
+    echo "  - Centralized JWT service"
+    echo "  - Enhanced security logging"
     echo ""
     echo "📊 Monitoring:"
-    echo "  - Prometheus metrics at :9090 (production only)"
-    echo "  - Grafana dashboards at :3001 (production only)"
+    echo "  - Prometheus metrics at :9090"
+    echo "  - Grafana dashboards at :3001"
     echo "  - Nginx logs in ./logs/nginx/"
+    echo "  - JWT service logs"
     echo ""
     echo "🔧 Load Balancing Features:"
     echo "  - Round-robin load balancing"
     echo "  - Health checks with failover"
     echo "  - Rate limiting per endpoint"
+    echo "  - JWT-based authentication"
     echo "  - Gzip compression"
     echo "  - Security headers"
     echo "  - Static file serving"
@@ -138,6 +150,15 @@ check_dependencies() {
     fi
     
     echo "✅ Dependencies check passed"
+}
+
+# Function to start JWT-enabled load balancer
+start_jwt() {
+    echo "🔐 Starting JWT-enabled load balancer..."
+    docker-compose -f docker-compose.jwt.yml up -d
+    echo "⏳ Waiting for services to start..."
+    sleep 15
+    show_usage
 }
 
 # Function to start development load balancer
@@ -191,6 +212,9 @@ case "${1:-setup}" in
     "start")
         start_lb
         ;;
+    "start-jwt")
+        start_jwt
+        ;;
     "start-scaled")
         start_scaled
         ;;
@@ -208,6 +232,10 @@ case "${1:-setup}" in
         echo "🛑 Stopping development services..."
         docker-compose -f docker-compose.dev.lb.yml down
         ;;
+    "stop-jwt")
+        echo "🛑 Stopping JWT services..."
+        docker-compose -f docker-compose.jwt.yml down
+        ;;
     "stop-scaled")
         echo "🛑 Stopping scaled services..."
         docker-compose -f docker-compose.scale.yml down
@@ -220,11 +248,12 @@ case "${1:-setup}" in
         echo "🧹 Cleaning up..."
         docker-compose -f docker-compose.lb.yml down -v
         docker-compose -f docker-compose.dev.lb.yml down -v
+        docker-compose -f docker-compose.jwt.yml down -v
         docker-compose -f docker-compose.scale.yml down -v
         docker system prune -f
         ;;
     *)
-        echo "Usage: $0 {setup|start-dev|start|start-scaled|status|logs|stop|stop-dev|stop-scaled|restart|clean}"
+        echo "Usage: $0 {setup|start-dev|start|start-jwt|start-scaled|status|logs|stop|stop-dev|stop-jwt|stop-scaled|restart|clean}"
         exit 1
         ;;
 esac
