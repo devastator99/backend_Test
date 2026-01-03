@@ -10,6 +10,7 @@ const { globalErrorHandler } = require('./utils/errors');
 const rateLimitMiddleware = require('./middleware/rateLimiter');
 const { sanitizeInput } = require('./middleware/validation');
 const { cacheMiddleware } = require('./utils/cache');
+const setupSwagger = require('./middleware/swagger');
 
 const userRoutes = require('./routes/userRoutes');
 const productRoutes = require('./routes/productRoutes');
@@ -34,6 +35,31 @@ app.use(rateLimitMiddleware);
 
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Setup Swagger documentation
+setupSwagger(app);
+
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     tags:
+ *       - Health
+ *     summary: System health check
+ *     description: Comprehensive health check including database and cache status
+ *     responses:
+ *       200:
+ *         description: System is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthCheck'
+ *       503:
+ *         description: System is unhealthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthCheck'
+ */
 app.get('/health', async (req, res) => {
   try {
     const dbHealth = await dbConnection.healthCheck();
@@ -53,10 +79,11 @@ app.get('/health', async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(503).json({
       success: false,
       message: 'Health check failed',
       error: error.message,
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -67,6 +94,10 @@ app.get('/api', cacheMiddleware(300), (req, res) => {
     message: 'Interview Backend API',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
+    documentation: {
+      swagger: `${req.protocol}://${req.get('host')}/api-docs`,
+      json: `${req.protocol}://${req.get('host')}/api-docs.json`,
+    },
     endpoints: {
       auth: {
         'POST /api/users/register': 'Register a new user',
@@ -90,6 +121,25 @@ app.get('/api', cacheMiddleware(300), (req, res) => {
         'PUT /api/products/:id': 'Update product (admin only)',
         'DELETE /api/products/:id': 'Delete product (admin only)',
       },
+      health: {
+        'GET /health': 'System health check',
+        'GET /api/health': 'API health check',
+      },
+      documentation: {
+        'GET /api-docs': 'Interactive API documentation',
+        'GET /api-docs.json': 'OpenAPI JSON specification',
+      },
+    },
+    features: {
+      authentication: 'JWT-based authentication',
+      fileUpload: 'Image upload for user avatars',
+      rateLimiting: 'Endpoint-specific rate limiting',
+      loadBalancing: 'Nginx load balancer support',
+      monitoring: 'Prometheus/Grafana integration',
+      caching: 'Redis-based caching',
+      logging: 'Winston logging system',
+      validation: 'Request validation and sanitization',
+      documentation: 'Swagger/OpenAPI documentation',
     },
   });
 });
@@ -102,6 +152,11 @@ app.use('*', (req, res) => {
     success: false,
     message: 'Route not found',
     timestamp: new Date().toISOString(),
+    availableEndpoints: {
+      documentation: '/api-docs',
+      health: '/health',
+      api: '/api',
+    },
   });
 });
 
@@ -143,9 +198,11 @@ const startServer = async () => {
     const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV}`);
-      console.log(`📚 API Documentation: http://localhost:${PORT}/api`);
+      console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+      console.log(`📄 OpenAPI Spec: http://localhost:${PORT}/api-docs.json`);
       console.log(`💚 Health Check: http://localhost:${PORT}/health`);
       console.log(`📁 Uploads: http://localhost:${PORT}/uploads`);
+      console.log(`🔐 JWT Service: http://localhost:${PORT}/api/swagger-info`);
     });
 
     return server;
