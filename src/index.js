@@ -2,21 +2,35 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const compression = require('compression');
 const path = require('path');
 const dbConnection = require('./config/database');
 const { requestLogger, errorLogger, performanceLogger } = require('./utils/logger');
 const { globalErrorHandler } = require('./utils/errors');
-const rateLimitMiddleware = require('./middleware/rateLimiter');
+const { 
+  rateLimitMiddleware: rateLimitMiddlewareFn, 
+  authRateLimitMiddleware,
+  uploadRateLimitMiddleware,
+  sensitiveRateLimitMiddleware,
+  createCustomRateLimiter,
+  getRateLimitStatus,
+  resetRateLimit
+} = require('./middleware/rateLimiter');
 const { sanitizeInput } = require('./middleware/validation');
 const { cacheMiddleware } = require('./utils/cache');
 const setupSwagger = require('./middleware/swagger');
+const { 
+  compressionWithLogging, 
+  selectiveCompression, 
+  compressionHeaders,
+  compressionStats 
+} = require('./middleware/compression');
 
 const userRoutes = require('./routes/userRoutes');
 const productRoutes = require('./routes/productRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+let server; // Global server variable
 
 app.use(helmet());
 app.use(cors({
@@ -25,13 +39,24 @@ app.use(cors({
     : ['http://localhost:3000', 'http://localhost:3001'],
   credentials: true,
 }));
-app.use(compression());
+
+// Add compression headers
+app.use(compressionHeaders);
+
+// Apply selective compression with logging
+app.use(selectiveCompression({
+  enabled: process.env.COMPRESSION_ENABLED !== 'false',
+  excludeRoutes: ['/health', '/metrics'],
+  includeRoutes: ['/api', '/api-docs'],
+  minSize: 1024
+}));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(sanitizeInput);
 app.use(requestLogger);
 app.use(performanceLogger);
-app.use(rateLimitMiddleware);
+app.use(rateLimitMiddlewareFn);
 
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -191,16 +216,39 @@ process.on('uncaughtException', (error) => {
   gracefulShutdown('uncaughtException');
 });
 
+// Compression statistics endpoint
+app.get('/compression-stats', (req, res) => {
+  const stats = compressionStats.getStats();
+  res.json({
+    success: true,
+    message: 'Compression statistics',
+    data: stats,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Reset compression stats endpoint
+app.post('/compression-stats/reset', (req, res) => {
+  compressionStats.reset();
+  res.json({
+    success: true,
+    message: 'Compression statistics reset',
+    timestamp: new Date().toISOString()
+  });
+});
+
 const startServer = async () => {
   try {
     await dbConnection.connect();
     
-    const server = app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV}`);
+      console.log(`🗜️  Compression: ${process.env.COMPRESSION_ENABLED !== 'false' ? 'Enabled' : 'Disabled'}`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
       console.log(`📄 OpenAPI Spec: http://localhost:${PORT}/api-docs.json`);
       console.log(`💚 Health Check: http://localhost:${PORT}/health`);
+      console.log(`📊 Compression Stats: http://localhost:${PORT}/compression-stats`);
       console.log(`📁 Uploads: http://localhost:${PORT}/uploads`);
       console.log(`🔐 JWT Service: http://localhost:${PORT}/api/swagger-info`);
     });
@@ -212,6 +260,6 @@ const startServer = async () => {
   }
 };
 
-const server = startServer();
+startServer();
 
 module.exports = app;
