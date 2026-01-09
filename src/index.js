@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 const dbConnection = require('./config/database');
@@ -24,6 +23,27 @@ const {
   compressionHeaders,
   compressionStats 
 } = require('./middleware/compression');
+const { 
+  healthCheck, 
+  simpleHealthCheck, 
+  livenessProbe, 
+  readinessProbe 
+} = require('./middleware/healthCheck');
+const { 
+  requestIdMiddleware, 
+  requestTrackingMiddleware,
+  requestStatsEndpoint,
+  resetRequestStats
+} = require('./middleware/requestId');
+const { 
+  dynamicCorsMiddleware,
+  corsErrorHandler 
+} = require('./middleware/cors');
+const { 
+  responseTimeMiddleware,
+  setApiMetadata,
+  setSecurityHeaders
+} = require('./utils/responseHelper');
 
 const userRoutes = require('./routes/userRoutes');
 const productRoutes = require('./routes/productRoutes');
@@ -32,21 +52,21 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 let server; // Global server variable
 
+// Security and CORS middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] 
-    : ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true,
-}));
+app.use(dynamicCorsMiddleware);
+app.use(corsErrorHandler);
 
-// Add compression headers
+// Request tracking and ID middleware
+app.use(requestIdMiddleware);
+app.use(requestTrackingMiddleware);
+app.use(responseTimeMiddleware);
+
+// Compression middleware
 app.use(compressionHeaders);
-
-// Apply selective compression with logging
 app.use(selectiveCompression({
   enabled: process.env.COMPRESSION_ENABLED !== 'false',
-  excludeRoutes: ['/health', '/metrics'],
+  excludeRoutes: ['/health', '/metrics', '/liveness', '/readiness'],
   includeRoutes: ['/api', '/api-docs'],
   minSize: 1024
 }));
@@ -216,6 +236,16 @@ process.on('uncaughtException', (error) => {
   gracefulShutdown('uncaughtException');
 });
 
+// Enhanced health check endpoints
+app.get('/health', healthCheck);
+app.get('/health/simple', simpleHealthCheck);
+app.get('/liveness', livenessProbe);
+app.get('/readiness', readinessProbe);
+
+// Request statistics endpoints
+app.get('/request-stats', requestStatsEndpoint);
+app.post('/request-stats/reset', resetRequestStats);
+
 // Compression statistics endpoint
 app.get('/compression-stats', (req, res) => {
   const stats = compressionStats.getStats();
@@ -248,7 +278,10 @@ const startServer = async () => {
       console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
       console.log(`📄 OpenAPI Spec: http://localhost:${PORT}/api-docs.json`);
       console.log(`💚 Health Check: http://localhost:${PORT}/health`);
+      console.log(`🏥 Liveness Probe: http://localhost:${PORT}/liveness`);
+      console.log(`✅ Readiness Probe: http://localhost:${PORT}/readiness`);
       console.log(`📊 Compression Stats: http://localhost:${PORT}/compression-stats`);
+      console.log(`📈 Request Stats: http://localhost:${PORT}/request-stats`);
       console.log(`📁 Uploads: http://localhost:${PORT}/uploads`);
       console.log(`🔐 JWT Service: http://localhost:${PORT}/api/swagger-info`);
     });
