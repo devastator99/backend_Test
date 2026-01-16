@@ -14,6 +14,23 @@ A **production-ready Node.js backend system** built with **Express.js**, **Prism
 - **Input Validation & Sanitization**
 - **Rate Limiting** and security middleware
 
+## ⚡ Quick Setup
+
+```bash
+# Clone and setup in one command
+git clone <repo-url> backend_Test && cd backend_Test && \
+npm install && \
+cp .env.example .env && \
+npm run prisma:generate && \
+npm run prisma:migrate && \
+npm run dev
+```
+
+**That's it!** Your server is now running on http://localhost:3000
+
+- 📚 API Documentation: http://localhost:3000/api-docs
+- 💚 Health Check: http://localhost:3000/health
+
 ### Security Features
 - **Helmet.js** for security headers
 - **CORS** configuration
