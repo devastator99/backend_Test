@@ -9,6 +9,13 @@ const {
 const { getAvatarUrl, cleanupOldAvatar } = require('../middleware/upload');
 const userService = require('../services/userService');
 
+/**
+ * Creates a new user in the system
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ * @returns {Promise<void>} - Returns user creation response
+ */
 const createUser = async (req, res, next) => {
   try {
     const user = await userService.createUser(req.body);
@@ -21,6 +28,13 @@ const createUser = async (req, res, next) => {
   }
 };
 
+/**
+ * Authenticates a user and returns JWT token
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ * @returns {Promise<void>} - Returns authentication response with token
+ */
 const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -35,6 +49,13 @@ const loginUser = async (req, res, next) => {
   }
 };
 
+/**
+ * Retrieves user by ID
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ * @returns {Promise<void>} - Returns user data
+ */
 const getUser = async (req, res, next) => {
   try {
     const user = await userService.getUserById(req.params.id);
