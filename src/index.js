@@ -1,4 +1,11 @@
 require('dotenv').config();
+const { validateEnvironment } = require('./config/env');
+
+// Validate environment variables before starting
+if (!validateEnvironment()) {
+  process.exit(1);
+}
+
 const express = require('express');
 const helmet = require('helmet');
 const path = require('path');
@@ -208,36 +215,7 @@ app.use('*', (req, res) => {
 app.use(errorLogger);
 app.use(globalErrorHandler);
 
-const gracefulShutdown = async (signal) => {
-  console.log(`Received ${signal}. Starting graceful shutdown...`);
-  
-  try {
-    await dbConnection.disconnect();
-    server.close(() => {
-      console.log('HTTP server closed');
-      process.exit(0);
-    });
-  } catch (error) {
-    console.error('Error during shutdown:', error);
-    process.exit(1);
-  }
-};
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('unhandledRejection');
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  gracefulShutdown('uncaughtException');
-});
-
 // Enhanced health check endpoints
-app.get('/health', healthCheck);
 app.get('/health/simple', simpleHealthCheck);
 app.get('/liveness', livenessProbe);
 app.get('/readiness', readinessProbe);
@@ -265,6 +243,34 @@ app.post('/compression-stats/reset', (req, res) => {
     message: 'Compression statistics reset',
     timestamp: new Date().toISOString()
   });
+});
+
+const gracefulShutdown = async (signal) => {
+  console.log(`Received ${signal}. Starting graceful shutdown...`);
+  
+  try {
+    await dbConnection.disconnect();
+    server.close(() => {
+      console.log('HTTP server closed');
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('unhandledRejection');
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
 });
 
 const startServer = async () => {
