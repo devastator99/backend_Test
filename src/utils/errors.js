@@ -25,14 +25,14 @@ class NotFoundError extends AppError {
 }
 
 class UnauthorizedError extends AppError {
-  constructor(message = 'Unauthorized access') {
+  constructor(message = 'Authentication required') {
     super(message, 401);
     this.name = 'UnauthorizedError';
   }
 }
 
 class ForbiddenError extends AppError {
-  constructor(message = 'Forbidden access') {
+  constructor(message = 'Insufficient permissions') {
     super(message, 403);
     this.name = 'ForbiddenError';
   }
@@ -95,9 +95,12 @@ const handleDuplicateFieldsDB = (err) => {
 const sendErrorDev = (err, req, res) => {
   return res.status(err.statusCode).json({
     success: false,
-    error: err,
-    message: err.message,
-    stack: err.stack,
+    error: {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+    },
+    timestamp: new Date().toISOString(),
   });
 };
 
@@ -106,13 +109,15 @@ const sendErrorProd = (err, req, res) => {
     return res.status(err.statusCode).json({
       success: false,
       message: err.message,
+      timestamp: new Date().toISOString(),
     });
   }
 
   console.error('ERROR 💥', err);
   return res.status(500).json({
     success: false,
-    message: 'Something went wrong!',
+    message: 'Internal server error',
+    timestamp: new Date().toISOString(),
   });
 };
 
