@@ -1,0 +1,25 @@
+Chapter 6: Data Loading, Storage, and File Formats
+This is quite a bit of munging that you’d rather not repeat each time you query the
+database. The SQLAlchemy project is a popular Python SQL toolkit that abstracts
+away many of the common differences between SQL databases. pandas has a
+read_sql function that enables you to read data easily from a general SQLAlchemy
+connection. You can install SQLAlchemy with conda like so:
+conda install sqlalchemy
+Now, we’ll connect to the same SQLite database with SQLAlchemy and read data
+from the table created before:
+In [149]: import sqlalchemy as sqla
+In [150]: db = sqla.create_engine("sqlite:///mydata.sqlite")
+In [151]: pd.read_sql("SELECT * FROM test", db)
+Out[151]: 
+             a           b     c  d
+0      Atlanta     Georgia  1.25  6
+1  Tallahassee     Florida  2.60  3
+2   Sacramento  California  1.70  5
+6.5 Conclusion
+Getting access to data is frequently the first step in the data analysis process. We have
+looked at a number of useful tools in this chapter that should help you get started.
+In the upcoming chapters we will dig deeper into data wrangling, data visualization,
+time series analysis, and other topics.
+6.5 Conclusion 
+| 
+201

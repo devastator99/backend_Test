@@ -1,0 +1,47 @@
+CHAPTER 9
+Plotting and Visualization
+Making informative visualizations (sometimes called plots) is one of the most impor‐
+tant tasks in data analysis. It may be a part of the exploratory process—for example,
+to help identify outliers or needed data transformations, or as a way of generating
+ideas for models. For others, building an interactive visualization for the web may
+be the end goal. Python has many add-on libraries for making static or dynamic
+visualizations, but I’ll be mainly focused on matplotlib and libraries that build on top
+of it.
+matplotlib is a desktop plotting package designed for creating plots and figures
+suitable for publication. The project was started by John Hunter in 2002 to enable
+a MATLAB-like plotting interface in Python. The matplotlib and IPython commun‐
+ities have collaborated to simplify interactive plotting from the IPython shell (and
+now, Jupyter notebook). matplotlib supports various GUI backends on all operating
+systems and can export visualizations to all of the common vector and raster graphics
+formats (PDF, SVG, JPG, PNG, BMP, GIF, etc.). With the exception of a few diagrams,
+nearly all of the graphics in this book were produced using matplotlib.
+Over time, matplotlib has spawned a number of add-on toolkits for data visualization
+that use matplotlib for their underlying plotting. One of these is seaborn, which we
+explore later in this chapter.
+The simplest way to follow the code examples in the chapter is to output plots in
+the Jupyter notebook. To set this up, execute the following statement in a Jupyter
+notebook:
+%matplotlib inline
+281
+Since this book’s first edition in 2012, many new data visualization
+libraries have been created, some of which (like Bokeh and Altair)
+take advantage of modern web technology to create interactive
+visualizations that integrate well with the Jupyter notebook. Rather
+than use multiple visualization tools in this book, I decided to stick
+with matplotlib for teaching the fundamentals, in particular since
+pandas has good integration with matplotlib. You can adapt the
+principles from this chapter to learn how to use other visualization
+libraries as well.
+9.1 A Brief matplotlib API Primer
+With matplotlib, we use the following import convention:
+In [13]: import matplotlib.pyplot as plt
+After running %matplotlib notebook in Jupyter (or simply %matplotlib in IPy‐
+thon), we can try creating a simple plot. If everything is set up right, a line plot like
+Figure 9-1 should appear:
+In [14]: data = np.arange(10)
+In [15]: data
+Out[15]: array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+In [16]: plt.plot(data)
+Figure 9-1. Simple line plot
+282 
+|

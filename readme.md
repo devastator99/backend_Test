@@ -11,6 +11,8 @@ A **production-ready Node.js backend system** built with **Express.js**, **Prism
 - **Comprehensive Error Handling** with custom error classes
 - **Advanced Logging** with Winston
 - **In-memory Caching** with NodeCache
+- **Prometheus Metrics** for HTTP, cache, and job queue monitoring
+- **Grafana Dashboards** with a starter overview dashboard
 - **Input Validation & Sanitization**
 - **Rate Limiting** and security middleware
 
@@ -30,6 +32,9 @@ npm run dev
 
 - 📚 API Documentation: http://localhost:3000/api-docs
 - 💚 Health Check: http://localhost:3000/health
+- 📈 Prometheus Metrics: http://localhost:3000/metrics
+- 📊 Prometheus UI: http://localhost:9090
+- 📈 Grafana UI: http://localhost:3001
 
 ### Security Features
 - **Helmet.js** for security headers
@@ -148,6 +153,7 @@ npm start
 
 ### System
 - `GET /health` - Health check with system metrics
+- `GET /metrics` - Prometheus scrape endpoint
 - `GET /api` - API documentation and endpoints
 
 ## 🔧 Configuration
@@ -195,6 +201,11 @@ The system uses Winston for comprehensive logging:
 - **Cache middleware** for GET endpoints
 - **Pattern-based cache invalidation**
 - **Cache statistics and monitoring**
+
+### Monitoring
+- **Prometheus** scrapes the application at `GET /metrics`
+- **Grafana** provisions the Prometheus datasource automatically
+- **Starter dashboard** lives in `monitoring/grafana/dashboards/`
 
 ### Database Optimization
 - **Connection pooling** and management

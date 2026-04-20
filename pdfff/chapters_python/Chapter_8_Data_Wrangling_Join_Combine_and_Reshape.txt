@@ -1,0 +1,17 @@
+Chapter 8: Data Wrangling: Join, Combine, and Reshape
+1      key   bar
+2      key   baz
+3        A     1
+4        A     2
+5        A     3
+6        B     4
+7        B     5
+8        B     6
+8.4 Conclusion
+Now that you have some pandas basics for data import, cleaning, and reorganization
+under your belt, we are ready to move on to data visualization with matplotlib. We
+will return to explore other areas of pandas later in the book when we discuss more
+advanced analytics.
+8.4 Conclusion 
+| 
+279

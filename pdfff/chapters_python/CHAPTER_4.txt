@@ -1,0 +1,75 @@
+CHAPTER 4
+NumPy Basics: Arrays and
+Vectorized Computation
+NumPy, short for Numerical Python, is one of the most important foundational pack‐
+ages for numerical computing in Python. Many computational packages providing
+scientific functionality use NumPy’s array objects as one of the standard interface
+lingua francas for data exchange. Much of the knowledge about NumPy that I cover is
+transferable to pandas as well.
+Here are some of the things you’ll find in NumPy:
+• ndarray, an efficient multidimensional array providing fast array-oriented arith‐
+•
+metic operations and flexible broadcasting capabilities
+• Mathematical functions for fast operations on entire arrays of data without hav‐
+•
+ing to write loops
+• Tools for reading/writing array data to disk and working with memory-mapped
+•
+files
+• Linear algebra, random number generation, and Fourier transform capabilities
+•
+• A C API for connecting NumPy with libraries written in C, C++, or FORTRAN
+•
+Because NumPy provides a comprehensive and well-documented C API, it is
+straightforward to pass data to external libraries written in a low-level language,
+and for external libraries to return data to Python as NumPy arrays. This feature
+has made Python a language of choice for wrapping legacy C, C++, or FORTRAN
+codebases and giving them a dynamic and accessible interface.
+While NumPy by itself does not provide modeling or scientific functionality, having
+an understanding of NumPy arrays and array-oriented computing will help you use
+tools with array computing semantics, like pandas, much more effectively. Since
+83
+NumPy is a large topic, I will cover many advanced NumPy features like broadcasting
+in more depth later (see Appendix A). Many of these advanced features are not
+needed to follow the rest of this book, but they may help you as you go deeper into
+scientific computing in Python.
+For most data analysis applications, the main areas of functionality I’ll focus on are:
+• Fast array-based operations for data munging and cleaning, subsetting and filter‐
+•
+ing, transformation, and any other kind of computation
+• Common array algorithms like sorting, unique, and set operations
+•
+• Efficient descriptive statistics and aggregating/summarizing data
+•
+• Data alignment and relational data manipulations for merging and joining heter‐
+•
+ogeneous datasets
+• Expressing conditional logic as array expressions instead of loops with if-elif-
+•
+else branches
+• Group-wise data manipulations (aggregation, transformation, and function
+•
+application)
+While NumPy provides a computational foundation for general numerical data
+processing, many readers will want to use pandas as the basis for most kinds of
+statistics or analytics, especially on tabular data. Also, pandas provides some more
+domain-specific functionality like time series manipulation, which is not present in
+NumPy.
+Array-oriented computing in Python traces its roots back to 1995,
+when Jim Hugunin created the Numeric library. Over the next
+10 years, many scientific programming communities began doing
+array programming in Python, but the library ecosystem had
+become fragmented in the early 2000s. In 2005, Travis Oliphant
+was able to forge the NumPy project from the then Numeric and
+Numarray projects to bring the community together around a sin‐
+gle array computing framework.
+One of the reasons NumPy is so important for numerical computations in Python is
+because it is designed for efficiency on large arrays of data. There are a number of
+reasons for this:
+• NumPy internally stores data in a contiguous block of memory, independent of
+•
+other built-in Python objects. NumPy’s library of algorithms written in the C lan‐
+guage can operate on this memory without any type checking or other overhead.
+NumPy arrays also use much less memory than built-in Python sequences.
+84 
+|

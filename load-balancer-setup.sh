@@ -12,7 +12,8 @@ echo "📁 Creating directories..."
 mkdir -p logs/nginx
 mkdir -p ssl
 mkdir -p monitoring/grafana/dashboards
-mkdir -p monitoring/grafana/datasources
+mkdir -p monitoring/grafana/provisioning/dashboards
+mkdir -p monitoring/grafana/provisioning/datasources
 
 # Generate self-signed SSL certificate for HTTPS (development only)
 echo "🔐 Generating SSL certificate..."
@@ -33,44 +34,162 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
-rule_files:
-  # - "first_rules.yml"
-  # - "second_rules.yml"
-
 scrape_configs:
-  - job_name: 'nginx'
-    static_configs:
-      - targets: ['nginx:80']
-    metrics_path: '/metrics'
-    scrape_interval: 5s
-
-  - job_name: 'node-app'
-    static_configs:
-      - targets: ['app1:3000', 'app2:3000', 'app3:3000']
+  - job_name: 'interview-backend'
     metrics_path: '/metrics'
     scrape_interval: 10s
-
-  - job_name: 'redis'
     static_configs:
-      - targets: ['redis:6379']
-
-  - job_name: 'postgres'
+      - targets: ['app1:3000', 'app2:3000', 'app3:3000']
+  - job_name: 'interview-backend-single'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
     static_configs:
-      - targets: ['db:5432']
+      - targets: ['app:3000']
 EOF
 
 # Create Grafana datasource configuration
 echo "📈 Creating Grafana datasource..."
-cat > monitoring/grafana/datasources/prometheus.yml << EOF
+cat > monitoring/grafana/provisioning/datasources/prometheus.yml << EOF
 apiVersion: 1
 
 datasources:
   - name: Prometheus
     type: prometheus
+    uid: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
     editable: true
+EOF
+
+# Create Grafana dashboard provisioning
+echo "📈 Creating Grafana dashboard provisioning..."
+cat > monitoring/grafana/provisioning/dashboards/dashboard.yml << EOF
+apiVersion: 1
+
+providers:
+  - name: interview-backend
+    orgId: 1
+    folder: Interview Backend
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+EOF
+
+# Create starter Grafana dashboard
+echo "📊 Creating Grafana dashboard..."
+cat > monitoring/grafana/dashboards/interview-backend-overview.json << EOF
+{
+  "uid": "interview-backend-overview",
+  "title": "Interview Backend Overview",
+  "tags": ["backend", "prometheus", "nodejs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "HTTP Requests / sec",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(app_http_requests_total[5m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops/s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP p95 Latency",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(app_http_request_duration_seconds_bucket[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "In-Flight Requests",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "app_http_in_flight_requests",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Resident Memory",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "app_process_resident_memory_bytes",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache Hits",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "app_cache_hits_total",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Job Queue Running",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "app_job_queue_running",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
 EOF
 
 # Create environment file

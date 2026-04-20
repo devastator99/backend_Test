@@ -6,6 +6,10 @@ if (!validateEnvironment()) {
   process.exit(1);
 }
 
+// Initialize job service
+const jobService = require('./services/jobService');
+jobService.start();
+
 const express = require('express');
 const helmet = require('helmet');
 const path = require('path');
@@ -51,6 +55,12 @@ const {
   setApiMetadata,
   setSecurityHeaders
 } = require('./utils/responseHelper');
+const { 
+  metricsMiddleware,
+  metricsHandler,
+  setMetricsProviders
+} = require('./utils/metrics');
+const { cacheService } = require('./utils/cache');
 
 const userRoutes = require('./routes/userRoutes');
 const productRoutes = require('./routes/productRoutes');
@@ -66,8 +76,9 @@ app.use(corsErrorHandler);
 
 // Request tracking and ID middleware
 app.use(requestIdMiddleware);
-app.use(requestTrackingMiddleware);
+app.use(requestTrackingMiddleware());
 app.use(responseTimeMiddleware);
+app.use(metricsMiddleware);
 
 // Compression middleware
 app.use(compressionHeaders);
@@ -188,6 +199,7 @@ app.get('/api', cacheMiddleware(300), (req, res) => {
       rateLimiting: 'Endpoint-specific rate limiting',
       loadBalancing: 'Nginx load balancer support',
       monitoring: 'Prometheus/Grafana integration',
+      metrics: 'Prometheus scrape endpoint at /metrics',
       caching: 'Redis-based caching',
       logging: 'Winston logging system',
       validation: 'Request validation and sanitization',
@@ -196,8 +208,19 @@ app.get('/api', cacheMiddleware(300), (req, res) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.redirect(302, '/api');
+});
+
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
+
+setMetricsProviders({
+  getCacheStats: () => cacheService.getStats(),
+  getJobStats: () => jobService.getQueueStats(),
+});
+
+app.get('/metrics', metricsHandler);
 
 app.use('*', (req, res) => {
   res.status(404).json({
@@ -207,6 +230,7 @@ app.use('*', (req, res) => {
     availableEndpoints: {
       documentation: '/api-docs',
       health: '/health',
+      metrics: '/metrics',
       api: '/api',
     },
   });
@@ -249,6 +273,9 @@ const gracefulShutdown = async (signal) => {
   console.log(`Received ${signal}. Starting graceful shutdown...`);
   
   try {
+    // Shutdown job service
+    await jobService.shutdown();
+    
     await dbConnection.disconnect();
     server.close(() => {
       console.log('HTTP server closed');
@@ -288,6 +315,7 @@ const startServer = async () => {
       console.log(`✅ Readiness Probe: http://localhost:${PORT}/readiness`);
       console.log(`📊 Compression Stats: http://localhost:${PORT}/compression-stats`);
       console.log(`📈 Request Stats: http://localhost:${PORT}/request-stats`);
+      console.log(`📉 Prometheus Metrics: http://localhost:${PORT}/metrics`);
       console.log(`📁 Uploads: http://localhost:${PORT}/uploads`);
       console.log(`🔐 JWT Service: http://localhost:${PORT}/api/swagger-info`);
     });

@@ -1,0 +1,59 @@
+CHAPTER 10
+Data Aggregation and Group Operations
+Categorizing a dataset and applying a function to each group, whether an aggregation
+or transformation, can be a critical component of a data analysis workflow. After
+loading, merging, and preparing a dataset, you may need to compute group statistics
+or possibly pivot tables for reporting or visualization purposes. pandas provides a
+versatile groupby interface, enabling you to slice, dice, and summarize datasets in a
+natural way.
+One reason for the popularity of relational databases and SQL (which stands for
+“structured query language”) is the ease with which data can be joined, filtered,
+transformed, and aggregated. However, query languages like SQL impose certain
+limitations on the kinds of group operations that can be performed. As you will see,
+with the expressiveness of Python and pandas, we can perform quite complex group
+operations by expressing them as custom Python functions that manipulate the data
+associated with each group. In this chapter, you will learn how to:
+• Split a pandas object into pieces using one or more keys (in the form of func‐
+•
+tions, arrays, or DataFrame column names)
+• Calculate group summary statistics, like count, mean, or standard deviation, or a
+•
+user-defined function
+• Apply within-group transformations or other manipulations, like normalization,
+•
+linear regression, rank, or subset selection
+• Compute pivot tables and cross-tabulations
+•
+• Perform quantile analysis and other statistical group analyses
+•
+319
+Time-based aggregation of time series data, a special use case of
+groupby, is referred to as resampling in this book and will receive
+separate treatment in Chapter 11.
+As with the rest of the chapters, we start by importing NumPy and pandas:
+In [12]: import numpy as np
+In [13]: import pandas as pd
+10.1 How to Think About Group Operations
+Hadley Wickham, an author of many popular packages for the R programming
+language, coined the term split-apply-combine for describing group operations. In the
+first stage of the process, data contained in a pandas object, whether a Series, Data‐
+Frame, or otherwise, is split into groups based on one or more keys that you provide.
+The splitting is performed on a particular axis of an object. For example, a DataFrame
+can be grouped on its rows (axis="index") or its columns (axis="columns"). Once
+this is done, a function is applied to each group, producing a new value. Finally,
+the results of all those function applications are combined into a result object. The
+form of the resulting object will usually depend on what’s being done to the data. See
+Figure 10-1 for a mockup of a simple group aggregation.
+Each grouping key can take many forms, and the keys do not have to be all of the
+same type:
+• A list or array of values that is the same length as the axis being grouped
+•
+• A value indicating a column name in a DataFrame
+•
+• A dictionary or Series giving a correspondence between the values on the axis
+•
+being grouped and the group names
+• A function to be invoked on the axis index or the individual labels in the index
+•
+320 
+|

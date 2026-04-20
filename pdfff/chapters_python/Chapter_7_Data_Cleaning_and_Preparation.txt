@@ -1,0 +1,31 @@
+Chapter 7: Data Cleaning and Preparation
+Creating dummy variables for modeling
+When you’re using statistics or machine learning tools, you’ll often transform catego‐
+rical data into dummy variables, also known as one-hot encoding. This involves creat‐
+ing a DataFrame with a column for each distinct category; these columns contain 1s
+for occurrences of a given category and 0 otherwise.
+Consider the previous example:
+In [264]: cat_s = pd.Series(['a', 'b', 'c', 'd'] * 2, dtype='category')
+As mentioned previously in this chapter, the pandas.get_dummies function converts
+this one-dimensional categorical data into a DataFrame containing the dummy
+variable:
+In [265]: pd.get_dummies(cat_s)
+Out[265]: 
+   a  b  c  d
+0  1  0  0  0
+1  0  1  0  0
+2  0  0  1  0
+3  0  0  0  1
+4  1  0  0  0
+5  0  1  0  0
+6  0  0  1  0
+7  0  0  0  1
+7.6 Conclusion
+Effective data preparation can significantly improve productivity by enabling you to
+spend more time analyzing data and less time getting it ready for analysis. We have
+explored a number of tools in this chapter, but the coverage here is by no means
+comprehensive. In the next chapter, we will explore pandas’s joining and grouping
+functionality.
+7.6 Conclusion 
+| 
+245

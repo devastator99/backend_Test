@@ -37,7 +37,7 @@ def split_into_chapters(text: str) -> Dict[str, str]:
     return chapter_dict
 
 
-def save_chapters_to_files(chapters: Dict[str, str], output_dir: str = "./chapters"):
+def save_chapters_to_files(chapters: Dict[str, str], output_dir: str = "./chapters_python"):
     """Save each chapter into a separate text file."""
     import os
     os.makedirs(output_dir, exist_ok=True)
@@ -60,11 +60,21 @@ def copy_chapter_text(chapter_title: str, chapters: Dict[str, str]) -> str:
 
 
 if __name__ == "__main__":
-    pdf_path = "atlas.pdf"
+    pdf_path = "pytho.pdf"
     text = extract_text_from_pdf(pdf_path)
     chapters = split_into_chapters(text)
     save_chapters_to_files(chapters)
     
+    # Print available chapters
+    print("Available chapters:")
+    for title in chapters.keys():
+        print(f"  - {title}")
+    
     # Example: Copy one chapter's text
-    selected = copy_chapter_text("Chapter II", chapters)
-    print(selected[:500])  # print preview
+    try:
+        selected = copy_chapter_text("CHAPTER 2", chapters)
+        print("\nChapter 2 content preview:")
+        print(selected[:500])  # print preview
+    except ValueError as e:
+        print(f"\nError: {e}")
+        print("Try one of the available chapters listed above")

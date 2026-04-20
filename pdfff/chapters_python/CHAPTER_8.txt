@@ -1,0 +1,74 @@
+CHAPTER 8
+Data Wrangling: Join,
+Combine, and Reshape
+In many applications, data may be spread across a number of files or databases, or be
+arranged in a form that is not convenient to analyze. This chapter focuses on tools to
+help combine, join, and rearrange data.
+First, I introduce the concept of hierarchical indexing in pandas, which is used exten‐
+sively in some of these operations. I then dig into the particular data manipulations.
+You can see various applied usages of these tools in Chapter 13.
+8.1 Hierarchical Indexing
+Hierarchical indexing is an important feature of pandas that enables you to have
+multiple (two or more) index levels on an axis. Another way of thinking about it
+is that it provides a way for you to work with higher dimensional data in a lower
+dimensional form. Let’s start with a simple example: create a Series with a list of lists
+(or arrays) as the index:
+In [11]: data = pd.Series(np.random.uniform(size=9),
+   ....:                  index=[["a", "a", "a", "b", "b", "c", "c", "d", "d"],
+   ....:                         [1, 2, 3, 1, 3, 1, 2, 2, 3]])
+In [12]: data
+Out[12]: 
+a  1    0.929616
+   2    0.316376
+   3    0.183919
+b  1    0.204560
+   3    0.567725
+c  1    0.595545
+   2    0.964515
+247
+d  2    0.653177
+   3    0.748907
+dtype: float64
+What you’re seeing is a prettified view of a Series with a MultiIndex as its index. The
+“gaps” in the index display mean “use the label directly above”:
+In [13]: data.index
+Out[13]: 
+MultiIndex([('a', 1),
+            ('a', 2),
+            ('a', 3),
+            ('b', 1),
+            ('b', 3),
+            ('c', 1),
+            ('c', 2),
+            ('d', 2),
+            ('d', 3)],
+           )
+With a hierarchically indexed object, so-called partial indexing is possible, enabling
+you to concisely select subsets of the data:
+In [14]: data["b"]
+Out[14]: 
+1    0.204560
+3    0.567725
+dtype: float64
+In [15]: data["b":"c"]
+Out[15]: 
+b  1    0.204560
+   3    0.567725
+c  1    0.595545
+   2    0.964515
+dtype: float64
+In [16]: data.loc[["b", "d"]]
+Out[16]: 
+b  1    0.204560
+   3    0.567725
+d  2    0.653177
+   3    0.748907
+dtype: float64
+Selection is even possible from an “inner” level. Here I select all of the values having
+the value 2 from the second index level:
+In [17]: data.loc[:, 2]
+Out[17]: 
+a    0.316376
+c    0.964515
+248 
+|

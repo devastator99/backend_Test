@@ -1,0 +1,70 @@
+CHAPTER 7
+Data Cleaning and Preparation
+During the course of doing data analysis and modeling, a significant amount of time
+is spent on data preparation: loading, cleaning, transforming, and rearranging. Such
+tasks are often reported to take up 80% or more of an analyst’s time. Sometimes the
+way that data is stored in files or databases is not in the right format for a particular
+task. Many researchers choose to do ad hoc processing of data from one form to
+another using a general-purpose programming language, like Python, Perl, R, or Java,
+or Unix text-processing tools like sed or awk. Fortunately, pandas, along with the
+built-in Python language features, provides you with a high-level, flexible, and fast set
+of tools to enable you to manipulate data into the right form.
+If you identify a type of data manipulation that isn’t anywhere in this book or
+elsewhere in the pandas library, feel free to share your use case on one of the
+Python mailing lists or on the pandas GitHub site. Indeed, much of the design and
+implementation of pandas have been driven by the needs of real-world applications.
+In this chapter I discuss tools for missing data, duplicate data, string manipulation,
+and some other analytical data transformations. In the next chapter, I focus on
+combining and rearranging datasets in various ways.
+7.1 Handling Missing Data
+Missing data occurs commonly in many data analysis applications. One of the goals
+of pandas is to make working with missing data as painless as possible. For example,
+all of the descriptive statistics on pandas objects exclude missing data by default.
+The way that missing data is represented in pandas objects is somewhat imperfect,
+but it is sufficient for most real-world use. For data with float64 dtype, pandas uses
+the floating-point value NaN (Not a Number) to represent missing data.
+203
+We call this a sentinel value: when present, it indicates a missing (or null) value:
+In [14]: float_data = pd.Series([1.2, -3.5, np.nan, 0])
+In [15]: float_data
+Out[15]: 
+0    1.2
+1   -3.5
+2    NaN
+3    0.0
+dtype: float64
+The isna method gives us a Boolean Series with True where values are null:
+In [16]: float_data.isna()
+Out[16]: 
+0    False
+1    False
+2     True
+3    False
+dtype: bool
+In pandas, we’ve adopted a convention used in the R programming language by refer‐
+ring to missing data as NA, which stands for not available. In statistics applications,
+NA data may either be data that does not exist or that exists but was not observed
+(through problems with data collection, for example). When cleaning up data for
+analysis, it is often important to do analysis on the missing data itself to identify data
+collection problems or potential biases in the data caused by missing data.
+The built-in Python None value is also treated as NA:
+In [17]: string_data = pd.Series(["aardvark", np.nan, None, "avocado"])
+In [18]: string_data
+Out[18]: 
+0    aardvark
+1         NaN
+2        None
+3     avocado
+dtype: object
+In [19]: string_data.isna()
+Out[19]: 
+0    False
+1     True
+2     True
+3    False
+dtype: bool
+In [20]: float_data = pd.Series([1, 2, None], dtype='float64')
+In [21]: float_data
+Out[21]: 
+204 
+|

@@ -1,0 +1,12 @@
+Chapter 11: Time Series
+Figure 11-10. Percentile rank of 2% AAPL return over one-year window
+If you don’t have SciPy installed already, you can install it with conda or pip:
+conda install scipy
+11.8 Conclusion
+Time series data calls for different types of analysis and data transformation tools
+than the other types of data we have explored in previous chapters.
+In the following chapter, we will show how to start using modeling libraries like
+statsmodels and scikit-learn.
+11.8 Conclusion 
+| 
+403

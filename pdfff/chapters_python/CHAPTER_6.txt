@@ -1,0 +1,83 @@
+CHAPTER 6
+Data Loading, Storage, and File Formats
+Reading data and making it accessible (often called data loading) is a necessary first
+step for using most of the tools in this book. The term parsing is also sometimes used
+to describe loading text data and interpreting it as tables and different data types. I’m
+going to focus on data input and output using pandas, though there are numerous
+tools in other libraries to help with reading and writing data in various formats.
+Input and output typically fall into a few main categories: reading text files and other
+more efficient on-disk formats, loading data from databases, and interacting with
+network sources like web APIs.
+6.1 Reading and Writing Data in Text Format
+pandas features a number of functions for reading tabular data as a DataFrame
+object. Table 6-1 summarizes some of them; pandas.read_csv is one of the most
+frequently used in this book. We will look at binary data formats later in Section 6.2,
+“Binary Data Formats,” on page 193.
+Table 6-1. Text and binary data loading functions in pandas
+Function
+Description
+read_csv
+Load delimited data from a file, URL, or file-like object; use comma as default delimiter
+read_fwf
+Read data in fixed-width column format (i.e., no delimiters)
+read_clipboard
+Variation of read_csv that reads data from the clipboard; useful for converting tables from web
+pages
+read_excel
+Read tabular data from an Excel XLS or XLSX file
+read_hdf
+Read HDF5 files written by pandas
+read_html
+Read all tables found in the given HTML document
+read_json
+Read data from a JSON (JavaScript Object Notation) string representation, file, URL, or file-like object
+175
+Function
+Description
+read_feather
+Read the Feather binary file format
+read_orc
+Read the Apache ORC binary file format
+read_parquet
+Read the Apache Parquet binary file format
+read_pickle
+Read an object stored by pandas using the Python pickle format
+read_sas
+Read a SAS dataset stored in one of the SAS system’s custom storage formats
+read_spss
+Read a data file created by SPSS
+read_sql
+Read the results of a SQL query (using SQLAlchemy)
+read_sql_table
+Read a whole SQL table (using SQLAlchemy); equivalent to using a query that selects everything in
+that table using read_sql
+read_stata
+Read a dataset from Stata file format
+read_xml
+Read a table of data from an XML file
+I’ll give an overview of the mechanics of these functions, which are meant to convert
+text data into a DataFrame. The optional arguments for these functions may fall into
+a few categories:
+Indexing
+Can treat one or more columns as the returned DataFrame, and whether to get
+column names from the file, arguments you provide, or not at all.
+Type inference and data conversion
+Includes the user-defined value conversions and custom list of missing value
+markers.
+Date and time parsing
+Includes a combining capability, including combining date and time information
+spread over multiple columns into a single column in the result.
+Iterating
+Support for iterating over chunks of very large files.
+Unclean data issues
+Includes skipping rows or a footer, comments, or other minor things like
+numeric data with thousands separated by commas.
+Because of how messy data in the real world can be, some of the data loading
+functions (especially pandas.read_csv) have accumulated a long list of optional
+arguments over time. It’s normal to feel overwhelmed by the number of different
+parameters (pandas.read_csv has around 50). The online pandas documentation
+has many examples about how each of these works, so if you’re struggling to read a
+particular file, there might be a similar enough example to help you find the right
+parameters.
+176 
+|

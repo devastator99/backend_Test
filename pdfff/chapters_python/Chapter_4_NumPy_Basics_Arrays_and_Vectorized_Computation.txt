@@ -1,0 +1,36 @@
+Chapter 4: NumPy Basics: Arrays and Vectorized Computation
+In [271]: walks.min()
+Out[271]: -120
+Out of these walks, let’s compute the minimum crossing time to 30 or –30. This is
+slightly tricky because not all 5,000 of them reach 30. We can check this using the any
+method:
+In [272]: hits30 = (np.abs(walks) >= 30).any(axis=1)
+In [273]: hits30
+Out[273]: array([False,  True,  True, ...,  True, False,  True])
+In [274]: hits30.sum() # Number that hit 30 or -30
+Out[274]: 3395
+We can use this Boolean array to select the rows of walks that actually cross the
+absolute 30 level, and call argmax across axis 1 to get the crossing times:
+In [275]: crossing_times = (np.abs(walks[hits30]) >= 30).argmax(axis=1)
+In [276]: crossing_times
+Out[276]: array([201, 491, 283, ..., 219, 259, 541])
+Lastly, we compute the average minimum crossing time:
+In [277]: crossing_times.mean()
+Out[277]: 500.5699558173785
+Feel free to experiment with other distributions for the steps other than equal-
+sized coin flips. You need only use a different random generator method, like stan
+dard_normal to generate normally distributed steps with some mean and standard
+deviation:
+In [278]: draws = 0.25 * rng.standard_normal((nwalks, nsteps))
+Keep in mind that this vectorized approach requires creating an
+array with nwalks * nsteps elements, which may use a large
+amount of memory for large simulations. If memory is more con‐
+strained, then a different approach will be required.
+4.8 Conclusion
+While much of the rest of the book will focus on building data wrangling skills
+with pandas, we will continue to work in a similar array-based style. In Appendix A,
+we will dig deeper into NumPy features to help you further develop your array
+computing skills.
+4.8 Conclusion 
+| 
+121

@@ -22,6 +22,11 @@ const rateLimiterOptions = {
   blockDuration: 60,
 };
 
+const formatResetHeader = (msBeforeNext) => {
+  const delayMs = Number.isFinite(msBeforeNext) ? Math.max(0, msBeforeNext) : 0;
+  return new Date(Date.now() + delayMs).toISOString();
+};
+
 const rateLimiter = redisClient 
   ? new RateLimiterRedis({
       ...rateLimiterOptions,
@@ -68,7 +73,7 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
       res.set({
         'X-RateLimit-Limit': limiter.points,
         'X-RateLimit-Remaining': result.remainingPoints,
-        'X-RateLimit-Reset': new Date(Date.now() + result.msBeforeNext).toISOString(),
+        'X-RateLimit-Reset': formatResetHeader(result.msBeforeNext),
       });
       
       next();
@@ -79,7 +84,7 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
         'Retry-After': String(secs),
         'X-RateLimit-Limit': limiter.points,
         'X-RateLimit-Remaining': '0',
-        'X-RateLimit-Reset': new Date(Date.now() + rejRes.msBeforeNext).toISOString(),
+        'X-RateLimit-Reset': formatResetHeader(rejRes?.msBeforeNext),
       });
       
       const key = limiter.keyGenerator(req);

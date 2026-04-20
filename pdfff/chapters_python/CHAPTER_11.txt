@@ -1,0 +1,61 @@
+CHAPTER 11
+Time Series
+Time series data is an important form of structured data in many different fields, such
+as finance, economics, ecology, neuroscience, and physics. Anything that is recorded
+repeatedly at many points in time forms a time series. Many time series are fixed
+frequency, which is to say that data points occur at regular intervals according to some
+rule, such as every 15 seconds, every 5 minutes, or once per month. Time series can
+also be irregular without a fixed unit of time or offset between units. How you mark
+and refer to time series data depends on the application, and you may have one of the
+following:
+Timestamps
+Specific instants in time.
+Fixed periods
+Such as the whole month of January 2017, or the whole year 2020.
+Intervals of time
+Indicated by a start and end timestamp. Periods can be thought of as special cases
+of intervals.
+Experiment or elapsed time
+Each timestamp is a measure of time relative to a particular start time (e.g., the
+diameter of a cookie baking each second since being placed in the oven), starting
+from 0.
+In this chapter, I am mainly concerned with time series in the first three categories,
+though many of the techniques can be applied to experimental time series where the
+index may be an integer or floating-point number indicating elapsed time from the
+start of the experiment. The simplest kind of time series is indexed by timestamp.
+357
+pandas also supports indexes based on timedeltas, which can be a
+useful way of representing experiment or elapsed time. We do not
+explore timedelta indexes in this book, but you can learn more in
+the pandas documentation.
+pandas provides many built-in time series tools and algorithms. You can efficiently
+work with large time series, and slice and dice, aggregate, and resample irregular-
+and fixed-frequency time series. Some of these tools are useful for financial and
+economics applications, but you could certainly use them to analyze server log data,
+too.
+As with the rest of the chapters, we start by importing NumPy and pandas:
+In [12]: import numpy as np
+In [13]: import pandas as pd
+11.1 Date and Time Data Types and Tools
+The Python standard library includes data types for date and time data, as well as
+calendar-related functionality. The datetime, time, and calendar modules are the
+main places to start. The datetime.datetime type, or simply datetime, is widely
+used:
+In [14]: from datetime import datetime
+In [15]: now = datetime.now()
+In [16]: now
+Out[16]: datetime.datetime(2022, 8, 12, 14, 9, 11, 337033)
+In [17]: now.year, now.month, now.day
+Out[17]: (2022, 8, 12)
+datetime stores both the date and time down to the microsecond. datetime.time
+delta, or simply timedelta, represents the temporal difference between two date
+time objects:
+In [18]: delta = datetime(2011, 1, 7) - datetime(2008, 6, 24, 8, 15)
+In [19]: delta
+Out[19]: datetime.timedelta(days=926, seconds=56700)
+In [20]: delta.days
+Out[20]: 926
+In [21]: delta.seconds
+Out[21]: 56700
+358 
+|

@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const { performanceLogger } = require('../utils/logger');
+const { logger } = require('../utils/logger');
 
 /**
  * Request ID middleware
@@ -19,7 +19,7 @@ const requestIdMiddleware = (req, res, next) => {
   res.locals.requestId = requestId;
   
   // Log request with ID
-  performanceLogger.info('Request started', {
+  logger.info('Request started', {
     requestId,
     method: req.method,
     url: req.url,
@@ -32,7 +32,7 @@ const requestIdMiddleware = (req, res, next) => {
   const originalEnd = res.end;
   res.end = function(chunk, encoding) {
     // Log response completion
-    performanceLogger.info('Request completed', {
+    logger.info('Request completed', {
       requestId,
       method: req.method,
       url: req.url,

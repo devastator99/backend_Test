@@ -1,0 +1,16 @@
+CHAPTER 2
+Python Language Basics, IPython,
+and Jupyter Notebooks
+When I wrote the first edition of this book in 2011 and 2012, there were fewer
+resources available for learning about doing data analysis in Python. This was
+partially a chicken-and-egg problem; many libraries that we now take for granted,
+like pandas, scikit-learn, and statsmodels, were comparatively immature back then.
+Now in 2022, there is now a growing literature on data science, data analysis, and
+machine learning, supplementing the prior works on general-purpose scientific com‐
+puting geared toward computational scientists, physicists, and professionals in other
+research fields. There are also excellent books about learning the Python program‐
+ming language itself and becoming an effective software engineer.
+As this book is intended as an introductory text in working with data in Python, I
+feel it is valuable to have a self-contained overview of some of the most important
+features of Python’s built-in data structures and libraries from the perspective of data
+manipulation. So, I will only present roughly enough information in this chapter and

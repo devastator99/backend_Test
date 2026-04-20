@@ -1,0 +1,4972 @@
+Chapter 13: Data Analysis Examples
+APPENDIX A
+Advanced NumPy
+In this appendix, I will go deeper into the NumPy library for array computing. This
+will include more internal details about the ndarray type and more advanced array
+manipulations and algorithms.
+This appendix contains miscellaneous topics and does not necessarily need to be read
+linearly. Throughout the chapters, I will generate random data for many examples
+that will use the default random number generator in the numpy.random module:
+In [11]: rng = np.random.default_rng(seed=12345)
+A.1 ndarray Object Internals
+The NumPy ndarray provides a way to interpret a block of homogeneously typed data
+(either contiguous or strided) as a multidimensional array object. The data type, or
+dtype, determines how the data is interpreted as being floating point, integer, Boolean,
+or any of the other types we’ve been looking at.
+Part of what makes ndarray flexible is that every array object is a strided view on a
+block of data. You might wonder, for example, how the array view arr[::2, ::-1]
+does not copy any data. The reason is that the ndarray is more than just a chunk
+of memory and a data type; it also has striding information that enables the array to
+move through memory with varying step sizes. More precisely, the ndarray internally
+consists of the following:
+• A pointer to data—that is, a block of data in RAM or in a memory-mapped file
+•
+• The data type or dtype describing fixed-size value cells in the array
+•
+• A tuple indicating the array’s shape
+•
+473
+• A tuple of strides—integers indicating the number of bytes to “step” in order to
+•
+advance one element along a dimension
+See Figure A-1 for a simple mock-up of the ndarray innards.
+Figure A-1. The NumPy ndarray object
+For example, a 10 × 5 array would have the shape (10, 5):
+In [12]: np.ones((10, 5)).shape
+Out[12]: (10, 5)
+A typical (C order) 3 × 4 × 5 array of float64 (8-byte) values has the strides (160,
+40, 8) (knowing about the strides can be useful because, in general, the larger the
+strides on a particular axis, the more costly it is to perform computation along that
+axis):
+In [13]: np.ones((3, 4, 5), dtype=np.float64).strides
+Out[13]: (160, 40, 8)
+While it is rare that a typical NumPy user would be interested in the array strides,
+they are needed to construct “zero-copy” array views. Strides can even be negative,
+which enables an array to move “backward” through memory (this would be the case,
+for example, in a slice like obj[::-1] or obj[:, ::-1]).
+NumPy Data Type Hierarchy
+You may occasionally have code that needs to check whether an array contains inte‐
+gers, floating-point numbers, strings, or Python objects. Because there are multiple
+types of floating-point numbers (float16 through float128), checking that the data
+type is among a list of types would be very verbose. Fortunately, the data types
+have superclasses, such as np.integer and np.floating, which can be used with the
+np.issubdtype function:
+In [14]: ints = np.ones(10, dtype=np.uint16)
+In [15]: floats = np.ones(10, dtype=np.float32)
+In [16]: np.issubdtype(ints.dtype, np.integer)
+Out[16]: True
+474 
+| 
+Appendix A: Advanced NumPy
+1 Some of the data types have trailing underscores in their names. These are there to avoid variable name
+conflicts between the NumPy-specific types and the Python built-in ones.
+In [17]: np.issubdtype(floats.dtype, np.floating)
+Out[17]: True
+You can see all of the parent classes of a specific data type by calling the type’s mro
+method:
+In [18]: np.float64.mro()
+Out[18]: 
+[numpy.float64,
+ numpy.floating,
+ numpy.inexact,
+ numpy.number,
+ numpy.generic,
+ float,
+ object]
+Therefore, we also have:
+In [19]: np.issubdtype(ints.dtype, np.number)
+Out[19]: True
+Most NumPy users will never have to know about this, but it is occasionally use‐
+ful. See Figure A-2 for a graph of the data type hierarchy and parent–subclass
+relationships.1
+Figure A-2. The NumPy data type class hierarchy
+Advanced NumPy 
+| 
+475
+A.2 Advanced Array Manipulation
+There are many ways to work with arrays beyond fancy indexing, slicing, and
+Boolean subsetting. While much of the heavy lifting for data analysis applications
+is handled by higher-level functions in pandas, you may at some point need to write a
+data algorithm that is not found in one of the existing libraries.
+Reshaping Arrays
+In many cases, you can convert an array from one shape to another without copying
+any data. To do this, pass a tuple indicating the new shape to the reshape array
+instance method. For example, suppose we had a one-dimensional array of values
+that we wished to rearrange into a matrix (this is illustrated in Figure A-3):
+In [20]: arr = np.arange(8)
+In [21]: arr
+Out[21]: array([0, 1, 2, 3, 4, 5, 6, 7])
+In [22]: arr.reshape((4, 2))
+Out[22]: 
+array([[0, 1],
+       [2, 3],
+       [4, 5],
+       [6, 7]])
+Figure A-3. Reshaping in C (row major) or FORTRAN (column major) order
+476 
+| 
+Appendix A: Advanced NumPy
+A multidimensional array can also be reshaped:
+In [23]: arr.reshape((4, 2)).reshape((2, 4))
+Out[23]: 
+array([[0, 1, 2, 3],
+       [4, 5, 6, 7]])
+One of the passed shape dimensions can be –1, in which case the value used for that
+dimension will be inferred from the data:
+In [24]: arr = np.arange(15)
+In [25]: arr.reshape((5, -1))
+Out[25]: 
+array([[ 0,  1,  2],
+       [ 3,  4,  5],
+       [ 6,  7,  8],
+       [ 9, 10, 11],
+       [12, 13, 14]])
+Since an array’s shape attribute is a tuple, it can be passed to reshape, too:
+In [26]: other_arr = np.ones((3, 5))
+In [27]: other_arr.shape
+Out[27]: (3, 5)
+In [28]: arr.reshape(other_arr.shape)
+Out[28]: 
+array([[ 0,  1,  2,  3,  4],
+       [ 5,  6,  7,  8,  9],
+       [10, 11, 12, 13, 14]])
+The opposite operation of reshape from one-dimensional to a higher dimension is
+typically known as flattening or raveling:
+In [29]: arr = np.arange(15).reshape((5, 3))
+In [30]: arr
+Out[30]: 
+array([[ 0,  1,  2],
+       [ 3,  4,  5],
+       [ 6,  7,  8],
+       [ 9, 10, 11],
+       [12, 13, 14]])
+In [31]: arr.ravel()
+Out[31]: array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14])
+ravel does not produce a copy of the underlying values if the values in the result
+were contiguous in the original array.
+Advanced NumPy 
+| 
+477
+The flatten method behaves like ravel except it always returns a copy of the data:
+In [32]: arr.flatten()
+Out[32]: array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14])
+The data can be reshaped or raveled in different orders. This is a slightly nuanced
+topic for new NumPy users and is therefore the next subtopic.
+C Versus FORTRAN Order
+NumPy is able to adapt to many different layouts of your data in memory. By default,
+NumPy arrays are created in row major order. Spatially this means that if you have
+a two-dimensional array of data, the items in each row of the array are stored in
+adjacent memory locations. The alternative to row major ordering is column major
+order, which means that values within each column of data are stored in adjacent
+memory locations.
+For historical reasons, row and column major order are also known as C and FOR‐
+TRAN order, respectively. In the FORTRAN 77 language, matrices are all column
+major.
+Functions like reshape and ravel accept an order argument indicating the order to
+use the data in the array. This is usually set to 'C' or 'F' in most cases (there are also
+less commonly used options 'A' and 'K'; see the NumPy documentation, and refer
+back to Figure A-3 for an illustration of these options):
+In [33]: arr = np.arange(12).reshape((3, 4))
+In [34]: arr
+Out[34]: 
+array([[ 0,  1,  2,  3],
+       [ 4,  5,  6,  7],
+       [ 8,  9, 10, 11]])
+In [35]: arr.ravel()
+Out[35]: array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11])
+In [36]: arr.ravel('F')
+Out[36]: array([ 0,  4,  8,  1,  5,  9,  2,  6, 10,  3,  7, 11])
+Reshaping arrays with more than two dimensions can be a bit mind-bending (see
+Figure A-3). The key difference between C and FORTRAN order is the way in which
+the dimensions are walked:
+C/row major order
+Traverse higher dimensions first (e.g., axis 1 before advancing on axis 0).
+FORTRAN/column major order
+Traverse higher dimensions last (e.g., axis 0 before advancing on axis 1).
+478 
+| 
+Appendix A: Advanced NumPy
+Concatenating and Splitting Arrays
+numpy.concatenate takes a sequence (tuple, list, etc.) of arrays and joins them in
+order along the input axis:
+In [37]: arr1 = np.array([[1, 2, 3], [4, 5, 6]])
+In [38]: arr2 = np.array([[7, 8, 9], [10, 11, 12]])
+In [39]: np.concatenate([arr1, arr2], axis=0)
+Out[39]: 
+array([[ 1,  2,  3],
+       [ 4,  5,  6],
+       [ 7,  8,  9],
+       [10, 11, 12]])
+In [40]: np.concatenate([arr1, arr2], axis=1)
+Out[40]: 
+array([[ 1,  2,  3,  7,  8,  9],
+       [ 4,  5,  6, 10, 11, 12]])
+There are some convenience functions, like vstack and hstack, for common kinds of
+concatenation. The preceding operations could have been expressed as:
+In [41]: np.vstack((arr1, arr2))
+Out[41]: 
+array([[ 1,  2,  3],
+       [ 4,  5,  6],
+       [ 7,  8,  9],
+       [10, 11, 12]])
+In [42]: np.hstack((arr1, arr2))
+Out[42]: 
+array([[ 1,  2,  3,  7,  8,  9],
+       [ 4,  5,  6, 10, 11, 12]])
+split, on the other hand, slices an array into multiple arrays along an axis:
+In [43]: arr = rng.standard_normal((5, 2))
+In [44]: arr
+Out[44]: 
+array([[-1.4238,  1.2637],
+       [-0.8707, -0.2592],
+       [-0.0753, -0.7409],
+       [-1.3678,  0.6489],
+       [ 0.3611, -1.9529]])
+In [45]: first, second, third = np.split(arr, [1, 3])
+In [46]: first
+Out[46]: array([[-1.4238,  1.2637]])
+Advanced NumPy 
+| 
+479
+In [47]: second
+Out[47]: 
+array([[-0.8707, -0.2592],
+       [-0.0753, -0.7409]])
+In [48]: third
+Out[48]: 
+array([[-1.3678,  0.6489],
+       [ 0.3611, -1.9529]])
+The value [1, 3] passed to np.split indicates the indices at which to split the array
+into pieces.
+See Table A-1 for a list of all relevant concatenation and splitting functions, some of
+which are provided only as a convenience of the very general-purpose concatenate.
+Table A-1. Array concatenation functions
+Function
+Description
+concatenate
+Most general function, concatenate collection of arrays along one axis
+vstack, row_stack
+Stack arrays by rows (along axis 0)
+hstack
+Stack arrays by columns (along axis 1)
+column_stack
+Like hstack, but convert 1D arrays to 2D column vectors first
+dstack
+Stack arrays by “depth” (along axis 2)
+split
+Split array at passed locations along a particular axis
+hsplit/vsplit
+Convenience functions for splitting on axis 0 and 1, respectively
+Stacking helpers: r_ and c_
+There are two special objects in the NumPy namespace, r_ and c_, that make stacking
+arrays more concise:
+In [49]: arr = np.arange(6)
+In [50]: arr1 = arr.reshape((3, 2))
+In [51]: arr2 = rng.standard_normal((3, 2))
+In [52]: np.r_[arr1, arr2]
+Out[52]: 
+array([[ 0.    ,  1.    ],
+       [ 2.    ,  3.    ],
+       [ 4.    ,  5.    ],
+       [ 2.3474,  0.9685],
+       [-0.7594,  0.9022],
+       [-0.467 , -0.0607]])
+In [53]: np.c_[np.r_[arr1, arr2], arr]
+Out[53]: 
+array([[ 0.    ,  1.    ,  0.    ],
+480 
+| 
+Appendix A: Advanced NumPy
+       [ 2.    ,  3.    ,  1.    ],
+       [ 4.    ,  5.    ,  2.    ],
+       [ 2.3474,  0.9685,  3.    ],
+       [-0.7594,  0.9022,  4.    ],
+       [-0.467 , -0.0607,  5.    ]])
+These additionally can translate slices to arrays:
+In [54]: np.c_[1:6, -10:-5]
+Out[54]: 
+array([[  1, -10],
+       [  2,  -9],
+       [  3,  -8],
+       [  4,  -7],
+       [  5,  -6]])
+See the docstring for more on what you can do with c_ and r_.
+Repeating Elements: tile and repeat
+Two useful tools for repeating or replicating arrays to produce larger arrays are the
+repeat and tile functions. repeat replicates each element in an array some number
+of times, producing a larger array:
+In [55]: arr = np.arange(3)
+In [56]: arr
+Out[56]: array([0, 1, 2])
+In [57]: arr.repeat(3)
+Out[57]: array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+The need to replicate or repeat arrays can be less common with
+NumPy than it is with other array programming frameworks like
+MATLAB. One reason for this is that broadcasting often fills this
+need better, which is the subject of the next section.
+By default, if you pass an integer, each element will be repeated that number of times.
+If you pass an array of integers, each element can be repeated a different number of
+times:
+In [58]: arr.repeat([2, 3, 4])
+Out[58]: array([0, 0, 1, 1, 1, 2, 2, 2, 2])
+Multidimensional arrays can have their elements repeated along a particular axis:
+In [59]: arr = rng.standard_normal((2, 2))
+In [60]: arr
+Out[60]: 
+array([[ 0.7888, -1.2567],
+Advanced NumPy 
+| 
+481
+       [ 0.5759,  1.399 ]])
+In [61]: arr.repeat(2, axis=0)
+Out[61]: 
+array([[ 0.7888, -1.2567],
+       [ 0.7888, -1.2567],
+       [ 0.5759,  1.399 ],
+       [ 0.5759,  1.399 ]])
+Note that if no axis is passed, the array will be flattened first, which is likely not what
+you want. Similarly, you can pass an array of integers when repeating a multidimen‐
+sional array to repeat a given slice a different number of times:
+In [62]: arr.repeat([2, 3], axis=0)
+Out[62]: 
+array([[ 0.7888, -1.2567],
+       [ 0.7888, -1.2567],
+       [ 0.5759,  1.399 ],
+       [ 0.5759,  1.399 ],
+       [ 0.5759,  1.399 ]])
+In [63]: arr.repeat([2, 3], axis=1)
+Out[63]: 
+array([[ 0.7888,  0.7888, -1.2567, -1.2567, -1.2567],
+       [ 0.5759,  0.5759,  1.399 ,  1.399 ,  1.399 ]])
+tile, on the other hand, is a shortcut for stacking copies of an array along an axis.
+Visually you can think of it as being akin to “laying down tiles”:
+In [64]: arr
+Out[64]: 
+array([[ 0.7888, -1.2567],
+       [ 0.5759,  1.399 ]])
+In [65]: np.tile(arr, 2)
+Out[65]: 
+array([[ 0.7888, -1.2567,  0.7888, -1.2567],
+       [ 0.5759,  1.399 ,  0.5759,  1.399 ]])
+The second argument is the number of tiles; with a scalar, the tiling is made row by
+row, rather than column by column. The second argument to tile can be a tuple
+indicating the layout of the “tiling”:
+In [66]: arr
+Out[66]: 
+array([[ 0.7888, -1.2567],
+       [ 0.5759,  1.399 ]])
+In [67]: np.tile(arr, (2, 1))
+Out[67]: 
+array([[ 0.7888, -1.2567],
+       [ 0.5759,  1.399 ],
+       [ 0.7888, -1.2567],
+482 
+| 
+Appendix A: Advanced NumPy
+       [ 0.5759,  1.399 ]])
+In [68]: np.tile(arr, (3, 2))
+Out[68]: 
+array([[ 0.7888, -1.2567,  0.7888, -1.2567],
+       [ 0.5759,  1.399 ,  0.5759,  1.399 ],
+       [ 0.7888, -1.2567,  0.7888, -1.2567],
+       [ 0.5759,  1.399 ,  0.5759,  1.399 ],
+       [ 0.7888, -1.2567,  0.7888, -1.2567],
+       [ 0.5759,  1.399 ,  0.5759,  1.399 ]])
+Fancy Indexing Equivalents: take and put
+As you may recall from Chapter 4, one way to get and set subsets of arrays is by fancy
+indexing using integer arrays:
+In [69]: arr = np.arange(10) * 100
+In [70]: inds = [7, 1, 2, 6]
+In [71]: arr[inds]
+Out[71]: array([700, 100, 200, 600])
+There are alternative ndarray methods that are useful in the special case of making a
+selection only on a single axis:
+In [72]: arr.take(inds)
+Out[72]: array([700, 100, 200, 600])
+In [73]: arr.put(inds, 42)
+In [74]: arr
+Out[74]: array([  0,  42,  42, 300, 400, 500,  42,  42, 800, 900])
+In [75]: arr.put(inds, [40, 41, 42, 43])
+In [76]: arr
+Out[76]: array([  0,  41,  42, 300, 400, 500,  43,  40, 800, 900])
+To use take along other axes, you can pass the axis keyword:
+In [77]: inds = [2, 0, 2, 1]
+In [78]: arr = rng.standard_normal((2, 4))
+In [79]: arr
+Out[79]: 
+array([[ 1.3223, -0.2997,  0.9029, -1.6216],
+       [-0.1582,  0.4495, -1.3436, -0.0817]])
+In [80]: arr.take(inds, axis=1)
+Out[80]: 
+Advanced NumPy 
+| 
+483
+array([[ 0.9029,  1.3223,  0.9029, -0.2997],
+       [-1.3436, -0.1582, -1.3436,  0.4495]])
+put does not accept an axis argument but rather indexes into the flattened (one-
+dimensional, C order) version of the array. Thus, when you need to set elements
+using an index array on other axes, it is best to use []-based indexing.
+A.3 Broadcasting
+Broadcasting governs how operations work between arrays of different shapes. It can
+be a powerful feature, but it can cause confusion, even for experienced users. The
+simplest example of broadcasting occurs when combining a scalar value with an
+array:
+In [81]: arr = np.arange(5)
+In [82]: arr
+Out[82]: array([0, 1, 2, 3, 4])
+In [83]: arr * 4
+Out[83]: array([ 0,  4,  8, 12, 16])
+Here we say that the scalar value 4 has been broadcast to all of the other elements in
+the multiplication operation.
+For example, we can demean each column of an array by subtracting the column
+means. In this case, it is necessary only to subtract an array containing the mean of
+each column:
+In [84]: arr = rng.standard_normal((4, 3))
+In [85]: arr.mean(0)
+Out[85]: array([0.1206, 0.243 , 0.1444])
+In [86]: demeaned = arr - arr.mean(0)
+In [87]: demeaned
+Out[87]: 
+array([[ 1.6042,  2.3751,  0.633 ],
+       [ 0.7081, -1.202 , -1.3538],
+       [-1.5329,  0.2985,  0.6076],
+       [-0.7793, -1.4717,  0.1132]])
+In [88]: demeaned.mean(0)
+Out[88]: array([ 0., -0.,  0.])
+484 
+| 
+Appendix A: Advanced NumPy
+See Figure A-4 for an illustration of this operation. Demeaning the rows as a broad‐
+cast operation requires a bit more care. Fortunately, broadcasting potentially lower
+dimensional values across any dimension of an array (like subtracting the row means
+from each column of a two-dimensional array) is possible as long as you follow the
+rules.
+This brings us to the broadcasting rule.
+The Broadcasting Rule
+Two arrays are compatible for broadcasting if for each trailing dimension (i.e., starting
+from the end) the axis lengths match or if either of the lengths is 1. Broadcasting is
+then performed over the missing or length 1 dimensions.
+Figure A-4. Broadcasting over axis 0 with a 1D array
+Even as an experienced NumPy user, I often find myself having to pause and draw
+a diagram as I think about the broadcasting rule. Consider the last example and sup‐
+pose we wished instead to subtract the mean value from each row. Since arr.mean(0)
+has length 3, it is compatible for broadcasting across axis 0 because the trailing
+dimension in arr is 3 and therefore matches. According to the rules, to subtract over
+axis 1 (i.e., subtract the row mean from each row), the smaller array must have the
+shape (4, 1):
+In [89]: arr
+Out[89]: 
+array([[ 1.7247,  2.6182,  0.7774],
+       [ 0.8286, -0.959 , -1.2094],
+       [-1.4123,  0.5415,  0.7519],
+       [-0.6588, -1.2287,  0.2576]])
+In [90]: row_means = arr.mean(1)
+Advanced NumPy 
+| 
+485
+In [91]: row_means.shape
+Out[91]: (4,)
+In [92]: row_means.reshape((4, 1))
+Out[92]: 
+array([[ 1.7068],
+       [-0.4466],
+       [-0.0396],
+       [-0.5433]])
+In [93]: demeaned = arr - row_means.reshape((4, 1))
+In [94]: demeaned.mean(1)
+Out[94]: array([-0.,  0.,  0.,  0.])
+See Figure A-5 for an illustration of this operation.
+Figure A-5. Broadcasting over axis 1 of a 2D array
+See Figure A-6 for another illustration, this time adding a two-dimensional array to a
+three-dimensional one across axis 0.
+486 
+| 
+Appendix A: Advanced NumPy
+Figure A-6. Broadcasting over axis 0 of a 3D array
+Broadcasting over Other Axes
+Broadcasting with higher dimensional arrays can seem even more mind-bending, but
+it is really a matter of following the rules. If you don’t, you’ll get an error like this:
+In [95]: arr - arr.mean(1)
+---------------------------------------------------------------------------
+ValueError                                Traceback (most recent call last)
+<ipython-input-95-8b8ada26fac0> in <module>
+----> 1 arr - arr.mean(1)
+ValueError: operands could not be broadcast together with shapes (4,3) (4,) 
+It’s quite common to want to perform an arithmetic operation with a lower dimen‐
+sional array across axes other than axis 0. According to the broadcasting rule, the
+“broadcast dimensions” must be 1 in the smaller array. In the example of row
+demeaning shown here, this means reshaping the row to be shape (4, 1) instead
+of (4,):
+In [96]: arr - arr.mean(1).reshape((4, 1))
+Out[96]: 
+array([[ 0.018 ,  0.9114, -0.9294],
+       [ 1.2752, -0.5124, -0.7628],
+       [-1.3727,  0.5811,  0.7915],
+       [-0.1155, -0.6854,  0.8009]])
+In the three-dimensional case, broadcasting over any of the three dimensions is only
+a matter of reshaping the data to be shape compatible. Figure A-7 nicely visualizes the
+shapes required to broadcast over each axis of a three-dimensional array.
+Advanced NumPy 
+| 
+487
+Figure A-7. Compatible 2D array shapes for broadcasting over a 3D array
+A common problem, therefore, is needing to add a new axis with length 1 specifi‐
+cally for broadcasting purposes. Using reshape is one option, but inserting an axis
+requires constructing a tuple indicating the new shape. This often can be a tedious
+exercise. Thus, NumPy arrays offer a special syntax for inserting new axes by index‐
+ing. We use the special np.newaxis attribute along with “full” slices to insert the new
+axis:
+In [97]: arr = np.zeros((4, 4))
+In [98]: arr_3d = arr[:, np.newaxis, :]
+In [99]: arr_3d.shape
+Out[99]: (4, 1, 4)
+In [100]: arr_1d = rng.standard_normal(3)
+In [101]: arr_1d[:, np.newaxis]
+Out[101]: 
+array([[ 0.3129],
+       [-0.1308],
+       [ 1.27  ]])
+In [102]: arr_1d[np.newaxis, :]
+Out[102]: array([[ 0.3129, -0.1308,  1.27  ]])
+Thus, if we had a three-dimensional array and wanted to demean axis 2, we would
+need to write:
+488 
+| 
+Appendix A: Advanced NumPy
+In [103]: arr = rng.standard_normal((3, 4, 5))
+In [104]: depth_means = arr.mean(2)
+In [105]: depth_means
+Out[105]: 
+array([[ 0.0431,  0.2747, -0.1885, -0.2014],
+       [-0.5732, -0.5467,  0.1183, -0.6301],
+       [ 0.0972,  0.5954,  0.0331, -0.6002]])
+In [106]: depth_means.shape
+Out[106]: (3, 4)
+In [107]: demeaned = arr - depth_means[:, :, np.newaxis]
+In [108]: demeaned.mean(2)
+Out[108]: 
+array([[ 0., -0.,  0., -0.],
+       [ 0., -0., -0., -0.],
+       [ 0.,  0.,  0.,  0.]])
+You might be wondering if there’s a way to generalize demeaning over an axis without
+sacrificing performance. There is, but it requires some indexing gymnastics:
+def demean_axis(arr, axis=0):
+    means = arr.mean(axis)
+    # This generalizes things like [:, :, np.newaxis] to N dimensions
+    indexer = [slice(None)] * arr.ndim
+    indexer[axis] = np.newaxis
+    return arr - means[indexer]
+Setting Array Values by Broadcasting
+The same broadcasting rule governing arithmetic operations also applies to setting
+values via array indexing. In a simple case, we can do things like:
+In [109]: arr = np.zeros((4, 3))
+In [110]: arr[:] = 5
+In [111]: arr
+Out[111]: 
+array([[5., 5., 5.],
+       [5., 5., 5.],
+       [5., 5., 5.],
+       [5., 5., 5.]])
+However, if we had a one-dimensional array of values we wanted to set into the
+columns of the array, we can do that as long as the shape is compatible:
+In [112]: col = np.array([1.28, -0.42, 0.44, 1.6])
+Advanced NumPy 
+| 
+489
+In [113]: arr[:] = col[:, np.newaxis]
+In [114]: arr
+Out[114]: 
+array([[ 1.28,  1.28,  1.28],
+       [-0.42, -0.42, -0.42],
+       [ 0.44,  0.44,  0.44],
+       [ 1.6 ,  1.6 ,  1.6 ]])
+In [115]: arr[:2] = [[-1.37], [0.509]]
+In [116]: arr
+Out[116]: 
+array([[-1.37 , -1.37 , -1.37 ],
+       [ 0.509,  0.509,  0.509],
+       [ 0.44 ,  0.44 ,  0.44 ],
+       [ 1.6  ,  1.6  ,  1.6  ]])
+A.4 Advanced ufunc Usage
+While many NumPy users will only use the fast element-wise operations provided
+by the universal functions, a number of additional features occasionally can help you
+write more concise code without explicit loops.
+ufunc Instance Methods
+Each of NumPy’s binary ufuncs has special methods for performing certain kinds of
+special vectorized operations. These are summarized in Table A-2, but I’ll give a few
+concrete examples to illustrate how they work.
+reduce takes a single array and aggregates its values, optionally along an axis, by
+performing a sequence of binary operations. For example, an alternative way to sum
+elements in an array is to use np.add.reduce:
+In [117]: arr = np.arange(10)
+In [118]: np.add.reduce(arr)
+Out[118]: 45
+In [119]: arr.sum()
+Out[119]: 45
+The starting value (for example, 0 for add) depends on the ufunc. If an axis is passed,
+the reduction is performed along that axis. This allows you to answer certain kinds of
+questions in a concise way. As a less mundane example, we can use np.logical_and
+to check whether the values in each row of an array are sorted:
+In [120]: my_rng = np.random.default_rng(12346)  # for reproducibility
+In [121]: arr = my_rng.standard_normal((5, 5))
+490 
+| 
+Appendix A: Advanced NumPy
+In [122]: arr
+Out[122]: 
+array([[-0.9039,  0.1571,  0.8976, -0.7622, -0.1763],
+       [ 0.053 , -1.6284, -0.1775,  1.9636,  1.7813],
+       [-0.8797, -1.6985, -1.8189,  0.119 , -0.4441],
+       [ 0.7691, -0.0343,  0.3925,  0.7589, -0.0705],
+       [ 1.0498,  1.0297, -0.4201,  0.7863,  0.9612]])
+In [123]: arr[::2].sort(1) # sort a few rows
+In [124]: arr[:, :-1] < arr[:, 1:]
+Out[124]: 
+array([[ True,  True,  True,  True],
+       [False,  True,  True, False],
+       [ True,  True,  True,  True],
+       [False,  True,  True, False],
+       [ True,  True,  True,  True]])
+In [125]: np.logical_and.reduce(arr[:, :-1] < arr[:, 1:], axis=1)
+Out[125]: array([ True, False,  True, False,  True])
+Note that logical_and.reduce is equivalent to the all method.
+The accumulate ufunc method is related to reduce, like cumsum is related to sum. It
+produces an array of the same size with the intermediate “accumulated” values:
+In [126]: arr = np.arange(15).reshape((3, 5))
+In [127]: np.add.accumulate(arr, axis=1)
+Out[127]: 
+array([[ 0,  1,  3,  6, 10],
+       [ 5, 11, 18, 26, 35],
+       [10, 21, 33, 46, 60]])
+outer performs a pair-wise cross product between two arrays:
+In [128]: arr = np.arange(3).repeat([1, 2, 2])
+In [129]: arr
+Out[129]: array([0, 1, 1, 2, 2])
+In [130]: np.multiply.outer(arr, np.arange(5))
+Out[130]: 
+array([[0, 0, 0, 0, 0],
+       [0, 1, 2, 3, 4],
+       [0, 1, 2, 3, 4],
+       [0, 2, 4, 6, 8],
+       [0, 2, 4, 6, 8]])
+Advanced NumPy 
+| 
+491
+The output of outer will have a dimension that is the concatenation of the dimen‐
+sions of the inputs:
+In [131]: x, y = rng.standard_normal((3, 4)), rng.standard_normal(5)
+In [132]: result = np.subtract.outer(x, y)
+In [133]: result.shape
+Out[133]: (3, 4, 5)
+The last method, reduceat, performs a “local reduce,” in essence an array “group by”
+operation in which slices of the array are aggregated together. It accepts a sequence of
+“bin edges” that indicate how to split and aggregate the values:
+In [134]: arr = np.arange(10)
+In [135]: np.add.reduceat(arr, [0, 5, 8])
+Out[135]: array([10, 18, 17])
+The results are the reductions (here, sums) performed over arr[0:5], arr[5:8], and
+arr[8:]. As with the other methods, you can pass an axis argument:
+In [136]: arr = np.multiply.outer(np.arange(4), np.arange(5))
+In [137]: arr
+Out[137]: 
+array([[ 0,  0,  0,  0,  0],
+       [ 0,  1,  2,  3,  4],
+       [ 0,  2,  4,  6,  8],
+       [ 0,  3,  6,  9, 12]])
+In [138]: np.add.reduceat(arr, [0, 2, 4], axis=1)
+Out[138]: 
+array([[ 0,  0,  0],
+       [ 1,  5,  4],
+       [ 2, 10,  8],
+       [ 3, 15, 12]])
+See Table A-2 for a partial listing of ufunc methods.
+Table A-2. ufunc methods
+Method
+Description
+accumulate(x)
+Aggregate values, preserving all partial aggregates.
+at(x, indices, b=None)
+Perform operation in place on x at the specified indices. The argument b is the second
+input to ufuncs that requires two array inputs.
+reduce(x)
+Aggregate values by successive applications of the operation.
+reduceat(x, bins)
+“Local” reduce or “group by”; reduce contiguous slices of data to produce an aggregated
+array.
+outer(x, y)
+Apply operation to all pairs of elements in x and y; the resulting array has shape
+x.shape + y.shape.
+492 
+| 
+Appendix A: Advanced NumPy
+Writing New ufuncs in Python
+There are a number of ways to create your own NumPy ufuncs. The most general is
+to use the NumPy C API, but that is beyond the scope of this book. In this section, we
+will look at pure Python ufuncs.
+numpy.frompyfunc accepts a Python function along with a specification for the num‐
+ber of inputs and outputs. For example, a simple function that adds element-wise
+would be specified as:
+In [139]: def add_elements(x, y):
+   .....:     return x + y
+In [140]: add_them = np.frompyfunc(add_elements, 2, 1)
+In [141]: add_them(np.arange(8), np.arange(8))
+Out[141]: array([0, 2, 4, 6, 8, 10, 12, 14], dtype=object)
+Functions created using frompyfunc always return arrays of Python objects, which
+can be inconvenient. Fortunately, there is an alternative (but slightly less feature rich)
+function, numpy.vectorize, that allows you to specify the output type:
+In [142]: add_them = np.vectorize(add_elements, otypes=[np.float64])
+In [143]: add_them(np.arange(8), np.arange(8))
+Out[143]: array([ 0.,  2.,  4.,  6.,  8., 10., 12., 14.])
+These functions provide a way to create ufunc-like functions, but they are very slow
+because they require a Python function call to compute each element, which is a lot
+slower than NumPy’s C-based ufunc loops:
+In [144]: arr = rng.standard_normal(10000)
+In [145]: %timeit add_them(arr, arr)
+2.43 ms +- 30.5 us per loop (mean +- std. dev. of 7 runs, 100 loops each)
+In [146]: %timeit np.add(arr, arr)
+2.88 us +- 47.9 ns per loop (mean +- std. dev. of 7 runs, 100000 loops each)
+Later in this appendix we’ll show how to create fast ufuncs in Python using the
+Numba library.
+A.5 Structured and Record Arrays
+You may have noticed up until now that ndarray is a homogeneous data container;
+that is, it represents a block of memory in which each element takes up the same
+number of bytes, as determined by the data type. On the surface, this would appear
+to not allow you to represent heterogeneous or tabular data. A structured array is an
+ndarray in which each element can be thought of as representing a struct in C (hence
+the “structured” name) or a row in a SQL table with multiple named fields:
+Advanced NumPy 
+| 
+493
+In [147]: dtype = [('x', np.float64), ('y', np.int32)]
+In [148]: sarr = np.array([(1.5, 6), (np.pi, -2)], dtype=dtype)
+In [149]: sarr
+Out[149]: array([(1.5   ,  6), (3.1416, -2)], dtype=[('x', '<f8'), ('y', '<i4')])
+There are several ways to specify a structured data type (see the online NumPy
+documentation). One typical way is as a list of tuples with (field_name,
+field_data_type). Now, the elements of the array are tuple-like objects whose
+elements can be accessed like a dictionary:
+In [150]: sarr[0]
+Out[150]: (1.5, 6)
+In [151]: sarr[0]['y']
+Out[151]: 6
+The field names are stored in the dtype.names attribute. When you access a field on
+the structured array, a strided view on the data is returned, thus copying nothing:
+In [152]: sarr['x']
+Out[152]: array([1.5   , 3.1416])
+Nested Data Types and Multidimensional Fields
+When specifying a structured data type, you can additionally pass a shape (as an int
+or tuple):
+In [153]: dtype = [('x', np.int64, 3), ('y', np.int32)]
+In [154]: arr = np.zeros(4, dtype=dtype)
+In [155]: arr
+Out[155]: 
+array([([0, 0, 0], 0), ([0, 0, 0], 0), ([0, 0, 0], 0), ([0, 0, 0], 0)],
+      dtype=[('x', '<i8', (3,)), ('y', '<i4')])
+In this case, the x field now refers to an array of length 3 for each record:
+In [156]: arr[0]['x']
+Out[156]: array([0, 0, 0])
+Conveniently, accessing arr['x'] then returns a two-dimensional array instead of a
+one-dimensional array as in prior examples:
+In [157]: arr['x']
+Out[157]: 
+array([[0, 0, 0],
+       [0, 0, 0],
+       [0, 0, 0],
+       [0, 0, 0]])
+494 
+| 
+Appendix A: Advanced NumPy
+This enables you to express more complicated, nested structures as a single block of
+memory in an array. You can also nest data types to make more complex structures.
+Here is an example:
+In [158]: dtype = [('x', [('a', 'f8'), ('b', 'f4')]), ('y', np.int32)]
+In [159]: data = np.array([((1, 2), 5), ((3, 4), 6)], dtype=dtype)
+In [160]: data['x']
+Out[160]: array([(1., 2.), (3., 4.)], dtype=[('a', '<f8'), ('b', '<f4')])
+In [161]: data['y']
+Out[161]: array([5, 6], dtype=int32)
+In [162]: data['x']['a']
+Out[162]: array([1., 3.])
+pandas DataFrame does not support this feature in the same way, though it is similar
+to hierarchical indexing.
+Why Use Structured Arrays?
+Compared with a pandas DataFrame, NumPy structured arrays are a lower level tool.
+They provide a means to interpret a block of memory as a tabular structure with
+nested columns. Since each element in the array is represented in memory as a fixed
+number of bytes, structured arrays provide an efficient way of writing data to and
+from disk (including memory maps), transporting it over the network, and other
+such uses. The memory layout of each value in a structured array is based on the
+binary representation of struct data types in the C programming language.
+As another common use for structured arrays, writing data files as fixed-length
+record byte streams is a common way to serialize data in C and C++ code, which
+is sometimes found in legacy systems in industry. As long as the format of the file
+is known (the size of each record and the order, byte size, and data type of each
+element), the data can be read into memory with np.fromfile. Specialized uses like
+this are beyond the scope of this book, but it’s worth knowing that such things are
+possible.
+A.6 More About Sorting
+Like Python’s built-in list, the ndarray sort instance method is an in-place sort,
+meaning that the array contents are rearranged without producing a new array:
+In [163]: arr = rng.standard_normal(6)
+In [164]: arr.sort()
+Advanced NumPy 
+| 
+495
+In [165]: arr
+Out[165]: array([-1.1553, -0.9319, -0.5218, -0.4745, -0.1649,  0.03  ])
+When sorting arrays in place, remember that if the array is a view on a different
+ndarray, the original array will be modified:
+In [166]: arr = rng.standard_normal((3, 5))
+In [167]: arr
+Out[167]: 
+array([[-1.1956,  0.4691, -0.3598,  1.0359,  0.2267],
+       [-0.7448, -0.5931, -1.055 , -0.0683,  0.458 ],
+       [-0.07  ,  0.1462, -0.9944,  1.1436,  0.5026]])
+In [168]: arr[:, 0].sort()  # Sort first column values in place
+In [169]: arr
+Out[169]: 
+array([[-1.1956,  0.4691, -0.3598,  1.0359,  0.2267],
+       [-0.7448, -0.5931, -1.055 , -0.0683,  0.458 ],
+       [-0.07  ,  0.1462, -0.9944,  1.1436,  0.5026]])
+On the other hand, numpy.sort creates a new, sorted copy of an array. Otherwise, it
+accepts the same arguments (such as kind) as ndarray’s sort method:
+In [170]: arr = rng.standard_normal(5)
+In [171]: arr
+Out[171]: array([ 0.8981, -1.1704, -0.2686, -0.796 ,  1.4522])
+In [172]: np.sort(arr)
+Out[172]: array([-1.1704, -0.796 , -0.2686,  0.8981,  1.4522])
+In [173]: arr
+Out[173]: array([ 0.8981, -1.1704, -0.2686, -0.796 ,  1.4522])
+All of these sort methods take an axis argument for independently sorting the sec‐
+tions of data along the passed axis:
+In [174]: arr = rng.standard_normal((3, 5))
+In [175]: arr
+Out[175]: 
+array([[-0.2535,  2.1183,  0.3634, -0.6245,  1.1279],
+       [ 1.6164, -0.2287, -0.6201, -0.1143, -1.2067],
+       [-1.0872, -2.1518, -0.6287, -1.3199,  0.083 ]])
+In [176]: arr.sort(axis=1)
+In [177]: arr
+Out[177]: 
+array([[-0.6245, -0.2535,  0.3634,  1.1279,  2.1183],
+496 
+| 
+Appendix A: Advanced NumPy
+       [-1.2067, -0.6201, -0.2287, -0.1143,  1.6164],
+       [-2.1518, -1.3199, -1.0872, -0.6287,  0.083 ]])
+You may notice that none of the sort methods have an option to sort in descending
+order. This is a problem in practice because array slicing produces views, thus not
+producing a copy or requiring any computational work. Many Python users are
+familiar with the “trick” that for a list of values, values[::-1] returns a list in
+reverse order. The same is true for ndarrays:
+In [178]: arr[:, ::-1]
+Out[178]: 
+array([[ 2.1183,  1.1279,  0.3634, -0.2535, -0.6245],
+       [ 1.6164, -0.1143, -0.2287, -0.6201, -1.2067],
+       [ 0.083 , -0.6287, -1.0872, -1.3199, -2.1518]])
+Indirect Sorts: argsort and lexsort
+In data analysis you may need to reorder datasets by one or more keys. For example,
+a table of data about some students might need to be sorted by last name, then by first
+name. This is an example of an indirect sort, and if you’ve read the pandas-related
+chapters, you have already seen many higher-level examples. Given a key or keys (an
+array of values or multiple arrays of values), you wish to obtain an array of integer
+indices (I refer to them colloquially as indexers) that tells you how to reorder the data
+to be in sorted order. Two methods for this are argsort and numpy.lexsort. As an
+example:
+In [179]: values = np.array([5, 0, 1, 3, 2])
+In [180]: indexer = values.argsort()
+In [181]: indexer
+Out[181]: array([1, 2, 4, 3, 0])
+In [182]: values[indexer]
+Out[182]: array([0, 1, 2, 3, 5])
+As a more complicated example, this code reorders a two-dimensional array by its
+first row:
+In [183]: arr = rng.standard_normal((3, 5))
+In [184]: arr[0] = values
+In [185]: arr
+Out[185]: 
+array([[ 5.    ,  0.    ,  1.    ,  3.    ,  2.    ],
+       [-0.7503, -2.1268, -1.391 , -0.4922,  0.4505],
+       [ 0.8926, -1.0479,  0.9553,  0.2936,  0.5379]])
+In [186]: arr[:, arr[0].argsort()]
+Out[186]: 
+Advanced NumPy 
+| 
+497
+array([[ 0.    ,  1.    ,  2.    ,  3.    ,  5.    ],
+       [-2.1268, -1.391 ,  0.4505, -0.4922, -0.7503],
+       [-1.0479,  0.9553,  0.5379,  0.2936,  0.8926]])
+lexsort is similar to argsort, but it performs an indirect lexicographical sort on
+multiple key arrays. Suppose we wanted to sort some data identified by first and last
+names:
+In [187]: first_name = np.array(['Bob', 'Jane', 'Steve', 'Bill', 'Barbara'])
+In [188]: last_name = np.array(['Jones', 'Arnold', 'Arnold', 'Jones', 'Walters'])
+In [189]: sorter = np.lexsort((first_name, last_name))
+In [190]: sorter
+Out[190]: array([1, 2, 3, 0, 4])
+In [191]: list(zip(last_name[sorter], first_name[sorter]))
+Out[191]: 
+[('Arnold', 'Jane'),
+ ('Arnold', 'Steve'),
+ ('Jones', 'Bill'),
+ ('Jones', 'Bob'),
+ ('Walters', 'Barbara')]
+lexsort can be a bit confusing the first time you use it, because the order in which
+the keys are used to order the data starts with the last array passed. Here, last_name
+was used before first_name.
+Alternative Sort Algorithms
+A stable sorting algorithm preserves the relative position of equal elements. This can
+be especially important in indirect sorts where the relative ordering is meaningful:
+In [192]: values = np.array(['2:first', '2:second', '1:first', '1:second',
+   .....:                    '1:third'])
+In [193]: key = np.array([2, 2, 1, 1, 1])
+In [194]: indexer = key.argsort(kind='mergesort')
+In [195]: indexer
+Out[195]: array([2, 3, 4, 0, 1])
+In [196]: values.take(indexer)
+Out[196]: 
+array(['1:first', '1:second', '1:third', '2:first', '2:second'],
+      dtype='<U8')
+The only stable sort available is mergesort, which has guaranteed O(n log n) perfor‐
+mance, but its performance is on average worse than the default quicksort method.
+498 
+| 
+Appendix A: Advanced NumPy
+See Table A-3 for a summary of available methods and their relative performance
+(and performance guarantees). This is not something that most users will ever have to
+think about, but it’s useful to know that it’s there.
+Table A-3. Array sorting methods
+Kind
+Speed
+Stable Work space
+Worst case
+'quicksort'
+1
+No
+0
+O(n^2)
+'mergesort'
+2
+Yes
+n / 2
+O(n log n)
+'heapsort'
+3
+No
+0
+O(n log n)
+Partially Sorting Arrays
+One of the goals of sorting can be to determine the largest or smallest elements
+in an array. NumPy has fast methods, numpy.partition and np.argpartition, for
+partitioning an array around the k-th smallest element:
+In [197]: rng = np.random.default_rng(12345)
+In [198]: arr = rng.standard_normal(20)
+In [199]: arr
+Out[199]: 
+array([-1.4238,  1.2637, -0.8707, -0.2592, -0.0753, -0.7409, -1.3678,
+        0.6489,  0.3611, -1.9529,  2.3474,  0.9685, -0.7594,  0.9022,
+       -0.467 , -0.0607,  0.7888, -1.2567,  0.5759,  1.399 ])
+In [200]: np.partition(arr, 3)
+Out[200]: 
+array([-1.9529, -1.4238, -1.3678, -1.2567, -0.8707, -0.7594, -0.7409,
+       -0.0607,  0.3611, -0.0753, -0.2592, -0.467 ,  0.5759,  0.9022,
+        0.9685,  0.6489,  0.7888,  1.2637,  1.399 ,  2.3474])
+After you call partition(arr, 3), the first three elements in the result are the small‐
+est three values in no particular order. numpy.argpartition, similar to numpy.arg
+sort, returns the indices that rearrange the data into the equivalent order:
+In [201]: indices = np.argpartition(arr, 3)
+In [202]: indices
+Out[202]: 
+array([ 9,  0,  6, 17,  2, 12,  5, 15,  8,  4,  3, 14, 18, 13, 11,  7, 16,
+        1, 19, 10])
+In [203]: arr.take(indices)
+Out[203]: 
+array([-1.9529, -1.4238, -1.3678, -1.2567, -0.8707, -0.7594, -0.7409,
+       -0.0607,  0.3611, -0.0753, -0.2592, -0.467 ,  0.5759,  0.9022,
+        0.9685,  0.6489,  0.7888,  1.2637,  1.399 ,  2.3474])
+Advanced NumPy 
+| 
+499
+numpy.searchsorted: Finding Elements in a Sorted Array
+searchsorted is an array method that performs a binary search on a sorted array,
+returning the location in the array where the value would need to be inserted to
+maintain sortedness:
+In [204]: arr = np.array([0, 1, 7, 12, 15])
+In [205]: arr.searchsorted(9)
+Out[205]: 3
+You can also pass an array of values to get an array of indices back:
+In [206]: arr.searchsorted([0, 8, 11, 16])
+Out[206]: array([0, 3, 3, 5])
+You might have noticed that searchsorted returned 0 for the 0 element. This is
+because the default behavior is to return the index at the left side of a group of equal
+values:
+In [207]: arr = np.array([0, 0, 0, 1, 1, 1, 1])
+In [208]: arr.searchsorted([0, 1])
+Out[208]: array([0, 3])
+In [209]: arr.searchsorted([0, 1], side='right')
+Out[209]: array([3, 7])
+As another application of searchsorted, suppose we had an array of values between
+0 and 10,000, and a separate array of “bucket edges” that we wanted to use to bin the
+data:
+In [210]: data = np.floor(rng.uniform(0, 10000, size=50))
+In [211]: bins = np.array([0, 100, 1000, 5000, 10000])
+In [212]: data
+Out[212]: 
+array([ 815., 1598., 3401., 4651., 2664., 8157., 1932., 1294.,  916.,
+       5985., 8547., 6016., 9319., 7247., 8605., 9293., 5461., 9376.,
+       4949., 2737., 4517., 6650., 3308., 9034., 2570., 3398., 2588.,
+       3554.,   50., 6286., 2823.,  680., 6168., 1763., 3043., 4408.,
+       1502., 2179., 4743., 4763., 2552., 2975., 2790., 2605., 4827.,
+       2119., 4956., 2462., 8384., 1801.])
+To then get a labeling to which interval each data point belongs (where 1 would mean
+the bucket [0, 100)), we can simply use searchsorted:
+In [213]: labels = bins.searchsorted(data)
+In [214]: labels
+Out[214]: 
+array([2, 3, 3, 3, 3, 4, 3, 3, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 4,
+500 
+| 
+Appendix A: Advanced NumPy
+       3, 4, 3, 3, 3, 3, 1, 4, 3, 2, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+       3, 3, 3, 3, 4, 3])
+This, combined with pandas’s groupby, can be used to bin data:
+In [215]: pd.Series(data).groupby(labels).mean()
+Out[215]: 
+1      50.000000
+2     803.666667
+3    3079.741935
+4    7635.200000
+dtype: float64
+A.7 Writing Fast NumPy Functions with Numba
+Numba is an open source project that creates fast functions for NumPy-like data
+using CPUs, GPUs, or other hardware. It uses the LLVM Project to translate Python
+code into compiled machine code.
+To introduce Numba, let’s consider a pure Python function that computes the expres‐
+sion (x - y).mean() using a for loop:
+import numpy as np
+def mean_distance(x, y):
+    nx = len(x)
+    result = 0.0
+    count = 0
+    for i in range(nx):
+        result += x[i] - y[i]
+        count += 1
+    return result / count
+This function is slow:
+In [209]: x = rng.standard_normal(10_000_000)
+In [210]: y = rng.standard_normal(10_000_000)
+In [211]: %timeit mean_distance(x, y)
+1 loop, best of 3: 2 s per loop
+In [212]: %timeit (x - y).mean()
+100 loops, best of 3: 14.7 ms per loop
+The NumPy version is over 100 times faster. We can turn this function into a
+compiled Numba function using the numba.jit function:
+In [213]: import numba as nb
+In [214]: numba_mean_distance = nb.jit(mean_distance)
+Advanced NumPy 
+| 
+501
+We also could have written this as a decorator:
+@nb.jit
+def numba_mean_distance(x, y):
+    nx = len(x)
+    result = 0.0
+    count = 0
+    for i in range(nx):
+        result += x[i] - y[i]
+        count += 1
+    return result / count
+The resulting function is actually faster than the vectorized NumPy version:
+In [215]: %timeit numba_mean_distance(x, y)
+100 loops, best of 3: 10.3 ms per loop
+Numba cannot compile all pure Python code, but it supports a significant subset of
+Python that is most useful for writing numerical algorithms.
+Numba is a deep library, supporting different kinds of hardware, modes of compila‐
+tion, and user extensions. It is also able to compile a substantial subset of the NumPy
+Python API without explicit for loops. Numba is able to recognize constructs that
+can be compiled to machine code, while substituting calls to the CPython API for
+functions that it does not know how to compile. Numba’s jit function option,
+nopython=True, restricts allowed code to Python code that can be compiled to
+LLVM without any Python C API calls. jit(nopython=True) has a shorter alias,
+numba.njit.
+In the previous example, we could have written:
+from numba import float64, njit
+@njit(float64(float64[:], float64[:]))
+def mean_distance(x, y):
+    return (x - y).mean()
+I encourage you to learn more by reading the online documentation for Numba. The
+next section shows an example of creating custom NumPy ufunc objects.
+Creating Custom numpy.ufunc Objects with Numba
+The numba.vectorize function creates compiled NumPy ufuncs, which behave like
+built-in ufuncs. Let’s consider a Python implementation of numpy.add:
+from numba import vectorize
+@vectorize
+def nb_add(x, y):
+    return x + y
+Now we have:
+502 
+| 
+Appendix A: Advanced NumPy
+In [13]: x = np.arange(10)
+In [14]: nb_add(x, x)
+Out[14]: array([  0.,   2.,   4.,   6.,   8.,  10.,  12.,  14.,  16.,  18.])
+In [15]: nb_add.accumulate(x, 0)
+Out[15]: array([  0.,   1.,   3.,   6.,  10.,  15.,  21.,  28.,  36.,  45.])
+A.8 Advanced Array Input and Output
+In Chapter 4, we became acquainted with np.save and np.load for storing arrays in
+binary format on disk. There are a number of additional options to consider for more
+sophisticated use. In particular, memory maps have the additional benefit of enabling
+you to do certain operations with datasets that do not fit into RAM.
+Memory-Mapped Files
+A memory-mapped file is a method for interacting with binary data on disk as though
+it is stored in an in-memory array. NumPy implements a memmap object that is
+ndarray-like, enabling small segments of a large file to be read and written without
+reading the whole array into memory. Additionally, a memmap has the same methods
+as an in-memory array and thus can be substituted into many algorithms where an
+ndarray would be expected.
+To create a new memory map, use the function np.memmap and pass a file path, data
+type, shape, and file mode:
+In [217]: mmap = np.memmap('mymmap', dtype='float64', mode='w+',
+   .....:                  shape=(10000, 10000))
+In [218]: mmap
+Out[218]: 
+memmap([[0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.],
+        [0., 0., 0., ..., 0., 0., 0.]])
+Slicing a memmap returns views on the data on disk:
+In [219]: section = mmap[:5]
+If you assign data to these, it will be buffered in memory, which means that the
+changes will not be immediately reflected in the on-disk file if you were to read
+the file in a different application. Any modifications can be synchronized to disk by
+calling flush:
+Advanced NumPy 
+| 
+503
+In [220]: section[:] = rng.standard_normal((5, 10000))
+In [221]: mmap.flush()
+In [222]: mmap
+Out[222]: 
+memmap([[-0.9074, -1.0954,  0.0071, ...,  0.2753, -1.1641,  0.8521],
+        [-0.0103, -0.0646, -1.0615, ..., -1.1003,  0.2505,  0.5832],
+        [ 0.4583,  1.2992,  1.7137, ...,  0.8691, -0.7889, -0.2431],
+        ...,
+        [ 0.    ,  0.    ,  0.    , ...,  0.    ,  0.    ,  0.    ],
+        [ 0.    ,  0.    ,  0.    , ...,  0.    ,  0.    ,  0.    ],
+        [ 0.    ,  0.    ,  0.    , ...,  0.    ,  0.    ,  0.    ]])
+In [223]: del mmap
+Whenever a memory map falls out of scope and is garbage collected, any changes
+will be flushed to disk also. When opening an existing memory map, you still have to
+specify the data type and shape, as the file is only a block of binary data without any
+data type information, shape, or strides:
+In [224]: mmap = np.memmap('mymmap', dtype='float64', shape=(10000, 10000))
+In [225]: mmap
+Out[225]: 
+memmap([[-0.9074, -1.0954,  0.0071, ...,  0.2753, -1.1641,  0.8521],
+        [-0.0103, -0.0646, -1.0615, ..., -1.1003,  0.2505,  0.5832],
+        [ 0.4583,  1.2992,  1.7137, ...,  0.8691, -0.7889, -0.2431],
+        ...,
+        [ 0.    ,  0.    ,  0.    , ...,  0.    ,  0.    ,  0.    ],
+        [ 0.    ,  0.    ,  0.    , ...,  0.    ,  0.    ,  0.    ],
+        [ 0.    ,  0.    ,  0.    , ...,  0.    ,  0.    ,  0.    ]])
+Memory maps also work with structured or nested data types, as described in Section
+A.5, “Structured and Record Arrays,” on page 493.
+If you ran this example on your computer, you may want to delete the large file that
+we created above:
+In [226]: %xdel mmap
+In [227]: !rm mymmap
+HDF5 and Other Array Storage Options
+PyTables and h5py are two Python projects providing NumPy-friendly interfaces for
+storing array data in the efficient and compressible HDF5 format (HDF stands for
+hierarchical data format). You can safely store hundreds of gigabytes or even terabytes
+of data in HDF5 format. To learn more about using HDF5 with Python, I recommend
+reading the pandas online documentation.
+504 
+| 
+Appendix A: Advanced NumPy
+A.9 Performance Tips
+Adapting data processing code to use NumPy generally makes things much faster,
+as array operations typically replace otherwise comparatively extremely slow pure
+Python loops. Here are some tips to help get the best performance out of the library:
+• Convert Python loops and conditional logic to array operations and Boolean
+•
+array operations.
+• Use broadcasting whenever possible.
+•
+• Use arrays views (slicing) to avoid copying data.
+•
+• Utilize ufuncs and ufunc methods.
+•
+If you can’t get the performance you require after exhausting the capabilities provided
+by NumPy alone, consider writing code in C, FORTRAN, or Cython. I use Cython
+frequently in my own work as a way to get C-like performance, often with much less
+development time.
+The Importance of Contiguous Memory
+While the full extent of this topic is a bit outside the scope of this book, in some
+applications the memory layout of an array can significantly affect the speed of
+computations. This is based partly on performance differences having to do with
+the cache hierarchy of the CPU; operations accessing contiguous blocks of memory
+(e.g., summing the rows of a C order array) will generally be the fastest because the
+memory subsystem will buffer the appropriate blocks of memory into the low latency
+L1 or L2 CPU caches. Also, certain code paths inside NumPy’s C codebase have been
+optimized for the contiguous case in which generic strided memory access can be
+avoided.
+To say that an array’s memory layout is contiguous means that the elements are stored
+in memory in the order that they appear in the array with respect to FORTRAN
+(column major) or C (row major) ordering. By default, NumPy arrays are created as
+C contiguous or just simply contiguous. A column major array, such as the transpose
+of a C-contiguous array, is thus said to be FORTRAN contiguous. These properties
+can be explicitly checked via the flags attribute on the ndarray:
+In [228]: arr_c = np.ones((100, 10000), order='C')
+In [229]: arr_f = np.ones((100, 10000), order='F')
+In [230]: arr_c.flags
+Out[230]: 
+  C_CONTIGUOUS : True
+  F_CONTIGUOUS : False
+  OWNDATA : True
+Advanced NumPy 
+| 
+505
+  WRITEABLE : True
+  ALIGNED : True
+  WRITEBACKIFCOPY : False
+  UPDATEIFCOPY : False
+In [231]: arr_f.flags
+Out[231]: 
+  C_CONTIGUOUS : False
+  F_CONTIGUOUS : True
+  OWNDATA : True
+  WRITEABLE : True
+  ALIGNED : True
+  WRITEBACKIFCOPY : False
+  UPDATEIFCOPY : False
+In [232]: arr_f.flags.f_contiguous
+Out[232]: True
+In this example, summing the rows of these arrays should, in theory, be faster for
+arr_c than arr_f since the rows are contiguous in memory. Here, I check using
+%timeit in IPython (these results may differ on your machine):
+In [233]: %timeit arr_c.sum(1)
+444 us +- 60.5 us per loop (mean +- std. dev. of 7 runs, 1000 loops each)
+In [234]: %timeit arr_f.sum(1)
+581 us +- 8.16 us per loop (mean +- std. dev. of 7 runs, 1000 loops each)
+When you’re looking to squeeze more performance out of NumPy, this is often a
+place to invest some effort. If you have an array that does not have the desired
+memory order, you can use copy and pass either 'C' or 'F':
+In [235]: arr_f.copy('C').flags
+Out[235]: 
+  C_CONTIGUOUS : True
+  F_CONTIGUOUS : False
+  OWNDATA : True
+  WRITEABLE : True
+  ALIGNED : True
+  WRITEBACKIFCOPY : False
+  UPDATEIFCOPY : False
+506 
+| 
+Appendix A: Advanced NumPy
+When constructing a view on an array, keep in mind that the result is not guaranteed
+to be contiguous:
+In [236]: arr_c[:50].flags.contiguous
+Out[236]: True
+In [237]: arr_c[:, :50].flags
+Out[237]: 
+  C_CONTIGUOUS : False
+  F_CONTIGUOUS : False
+  OWNDATA : False
+  WRITEABLE : True
+  ALIGNED : True
+  WRITEBACKIFCOPY : False
+  UPDATEIFCOPY : False
+Advanced NumPy 
+| 
+507
+APPENDIX B
+More on the IPython System
+In Chapter 2 we looked at the basics of using the IPython shell and Jupyter notebook.
+In this appendix, we explore some deeper functionality in the IPython system that
+can either be used from the console or within Jupyter.
+B.1 Terminal Keyboard Shortcuts
+IPython has many keyboard shortcuts for navigating the prompt (which will be
+familiar to users of the Emacs text editor or the Unix bash shell) and interacting
+with the shell’s command history. Table B-1 summarizes some of the most commonly
+used shortcuts. See Figure B-1 for an illustration of a few of these, such as cursor
+movement.
+Table B-1. Standard IPython keyboard shortcuts
+Keyboard shortcut
+Description
+Ctrl-P or up-arrow
+Search backward in command history for commands starting with currently entered text
+Ctrl-N or down-arrow Search forward in command history for commands starting with currently entered text
+Ctrl-R
+Readline-style reverse history search (partial matching)
+Ctrl-Shift-V
+Paste text from clipboard
+Ctrl-C
+Interrupt currently executing code
+Ctrl-A
+Move cursor to beginning of line
+Ctrl-E
+Move cursor to end of line
+Ctrl-K
+Delete text from cursor until end of line
+Ctrl-U
+Discard all text on current line
+Ctrl-F
+Move cursor forward one character
+Ctrl-B
+Move cursor back one character
+Ctrl-L
+Clear screen
+509
+Figure B-1. Illustration of some keyboard shortcuts in the IPython shell
+Note that Jupyter notebooks have a largely separate set of keyboard shortcuts for
+navigation and editing. Since these shortcuts have evolved more rapidly than the ones
+in IPython, I encourage you to explore the integrated help system in the Jupyter
+notebook menus.
+B.2 About Magic Commands
+Special commands in IPython (which are not built into Python itself) are known
+as magic commands. These are designed to facilitate common tasks and enable you
+to easily control the behavior of the IPython system. A magic command is any com‐
+mand prefixed by the percent symbol %. For example, you can check the execution
+time of any Python statement, such as a matrix multiplication, using the %timeit
+magic function:
+In [20]: a = np.random.standard_normal((100, 100))
+    In [20]: %timeit np.dot(a, a)
+    92.5 µs ± 3.43 µs per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+Magic commands can be viewed as command-line programs to be run within the
+IPython system. Many of them have additional “command-line” options, which can
+all be viewed (as you might expect) using ?:
+In [21]: %debug?
+    Docstring:
+    ::
+    %debug [--breakpoint FILE:LINE] [statement [statement ...]]
+    Activate the interactive debugger.
+    This magic command support two ways of activating debugger.
+    One is to activate debugger before executing code.  This way, you
+    can set a break point, to step through the code from the point.
+    You can use this mode by giving statements to execute and optionally
+    a breakpoint.
+    The other one is to activate debugger in post-mortem mode.  You can
+    activate this mode simply running %debug without any argument.
+    If an exception has just occurred, this lets you inspect its stack
+    frames interactively.  Note that this will always work only on the last
+510 
+| 
+Appendix B: More on the IPython System
+    traceback that occurred, so you must call this quickly after an
+    exception that you wish to inspect has fired, because if another one
+    occurs, it clobbers the previous one.
+    If you want IPython to automatically do this on every exception, see
+    the %pdb magic for more details.
+    .. versionchanged:: 7.3
+    When running code, user variables are no longer expanded,
+    the magic line is always left unmodified.
+    positional arguments:
+    statement             Code to run in debugger. You can omit this in cell 
+    magic mode.
+    optional arguments:
+    --breakpoint <FILE:LINE>, -b <FILE:LINE>
+    Set break point at LINE in FILE.
+Magic functions can be used by default without the percent sign, as long as no
+variable is defined with the same name as the magic function in question. This
+feature is called automagic and can be enabled or disabled with %automagic.
+Some magic functions behave like Python functions, and their output can be assigned
+to a variable:
+In [22]: %pwd
+    Out[22]: '/home/wesm/code/pydata-book'
+    In [23]: foo = %pwd
+    In [24]: foo
+    Out[24]: '/home/wesm/code/pydata-book'
+Since IPython’s documentation is accessible from within the system, I encourage you
+to explore all of the special commands available by using %quickref or %magic. This
+information is shown in a console pager, so you will need to press q to exit from the
+pager. Table B-2 highlights some of the most critical commands for being productive
+in interactive computing and Python development in IPython.
+Table B-2. Some frequently used IPython magic commands
+Command
+Description
+%quickref
+Display the IPython Quick Reference Card
+%magic
+Display detailed documentation for all of the available magic commands
+%debug
+Enter the interactive debugger at the bottom of the last exception traceback
+%hist
+Print command input (and optionally output) history
+%pdb
+Automatically enter debugger after any exception
+%paste
+Execute preformatted Python code from clipboard
+More on the IPython System 
+| 
+511
+Command
+Description
+%cpaste
+Open a special prompt for manually pasting Python code to be executed
+%reset
+Delete all variables/names defined in an interactive namespace
+%page OBJECT
+Pretty-print the object and display it through a pager
+%run script.py
+Run a Python script inside IPython
+%prun statement
+Execute statement with cProfile and report the profiler output
+%time statement
+Report the execution time of a single statement
+%timeit statement
+Run a statement multiple times to compute an ensemble average execution time; useful for
+timing code with very short execution time
+%who, %who_ls, %whos
+Display variables defined in interactive namespace, with varying levels of information/
+verbosity
+%xdel variable
+Delete a variable and attempt to clear any references to the object in the IPython internals
+The %run Command
+You can run any file as a Python program inside the environment of your IPython
+session using the %run command. Suppose you had the following simple script stored
+in script.py:
+def f(x, y, z):
+    return (x + y) / z
+a = 5
+b = 6
+c = 7.5
+result = f(a, b, c)
+You can execute this by passing the filename to %run:
+In [14]: %run script.py
+The script is run in an empty namespace (with no imports or other variables defined),
+so that the behavior should be identical to running the program on the command
+line using python script.py. All of the variables (imports, functions, and globals)
+defined in the file (up until an exception, if any, is raised) will then be accessible in
+the IPython shell:
+In [15]: c
+Out [15]: 7.5
+In [16]: result
+Out[16]: 1.4666666666666666
+If a Python script expects command-line arguments (to be found in sys.argv), these
+can be passed after the file path as though run on the command line.
+512 
+| 
+Appendix B: More on the IPython System
+If you want to give a script access to variables already defined in the
+interactive IPython namespace, use %run -i instead of plain %run.
+In the Jupyter notebook, you can also use the related %load magic function, which
+imports a script into a code cell:
+In [16]: %load script.py
+    def f(x, y, z):
+        return (x + y) / z
+    a = 5
+    b = 6
+    c = 7.5
+    result = f(a, b, c)
+Interrupting running code
+Pressing Ctrl-C while any code is running, whether a script through %run or a
+long-running command, will raise a KeyboardInterrupt. This will cause nearly all
+Python programs to stop immediately except in certain unusual cases.
+When a piece of Python code has called into some compiled exten‐
+sion modules, pressing Ctrl-C will not always cause the program
+execution to stop immediately. In such cases, you will have to either
+wait until control is returned to the Python interpreter, or in more
+dire circumstances, forcibly terminate the Python process in your
+operating system (such as using Task Manager on Windows or the
+kill command on Linux).
+Executing Code from the Clipboard
+If you are using the Jupyter notebook, you can copy and paste code into any code cell
+and execute it. It is also possible to run code from the clipboard in the IPython shell.
+Suppose you had the following code in some other application:
+x = 5
+y = 7
+if x > 5:
+    x += 1
+    y = 8
+The most foolproof methods are the %paste and %cpaste magic functions (note that
+these do not work in Jupyter since you can copy and paste into a Jupyter code cell).
+More on the IPython System 
+| 
+513
+%paste takes whatever text is in the clipboard and executes it as a single block in the
+shell:
+In [17]: %paste
+x = 5
+y = 7
+if x > 5:
+    x += 1
+    y = 8
+## -- End pasted text --
+%cpaste is similar, except that it gives you a special prompt for pasting code into:
+In [18]: %cpaste
+Pasting code; enter '--' alone on the line to stop or use Ctrl-D.
+:x = 5
+:y = 7
+:if x > 5:
+:    x += 1
+:
+:    y = 8
+:--
+With the %cpaste block, you have the freedom to paste as much code as you like
+before executing it. You might decide to use %cpaste to look at the pasted code
+before executing it. If you accidentally paste the wrong code, you can break out of the
+%cpaste prompt by pressing Ctrl-C.
+B.3 Using the Command History
+IPython maintains a small on-disk database containing the text of each command
+that you execute. This serves various purposes:
+• Searching, completing, and executing previously executed commands with mini‐
+•
+mal typing
+• Persisting the command history between sessions
+•
+• Logging the input/output history to a file
+•
+These features are more useful in the shell than in the notebook, since the notebook
+by design keeps a log of the input and output in each code cell.
+Searching and Reusing the Command History
+The IPython shell lets you search and execute previous code or other commands.
+This is useful, as you may often find yourself repeating the same commands, such as a
+%run command or some other code snippet. Suppose you had run:
+514 
+| 
+Appendix B: More on the IPython System
+In[7]: %run first/second/third/data_script.py
+and then explored the results of the script (assuming it ran successfully), only to find
+that you made an incorrect calculation. After figuring out the problem and modifying
+data_script.py, you can start typing a few letters of the %run command and then press
+either the Ctrl-P key combination or the up arrow key. This will search the command
+history for the first prior command matching the letters you typed. Pressing either
+Ctrl-P or the up arrow key multiple times will continue to search through the history.
+If you pass over the command you wish to execute, fear not. You can move forward
+through the command history by pressing either Ctrl-N or the down arrow key. After
+doing this a few times, you may start pressing these keys without thinking!
+Using Ctrl-R gives you the same partial incremental searching capability provided by
+the readline used in Unix-style shells, such as the bash shell. On Windows, readline
+functionality is emulated by IPython. To use this, press Ctrl-R and then type a few
+characters contained in the input line you want to search for:
+In [1]: a_command = foo(x, y, z)
+(reverse-i-search)`com': a_command = foo(x, y, z)
+Pressing Ctrl-R will cycle through the history for each line, matching the characters
+you’ve typed.
+Input and Output Variables
+Forgetting to assign the result of a function call to a variable can be very annoying.
+An IPython session stores references to both the input commands and output Python
+objects in special variables. The previous two outputs are stored in the _ (one under‐
+score) and __ (two underscores) variables, respectively:
+In [18]: 'input1'
+Out[18]: 'input1'
+In [19]: 'input2'
+Out[19]: 'input2'
+In [20]: __
+Out[20]: 'input1'
+In [21]: 'input3'
+Out[21]: 'input3'
+In [22]: _
+Out[22]: 'input3'
+Input variables are stored in variables named _iX, where X is the input line number.
+More on the IPython System 
+| 
+515
+For each input variable there is a corresponding output variable _X. So after input line
+27, say, there will be two new variables, _27 (for the output) and _i27 for the input:
+In [26]: foo = 'bar'
+In [27]: foo
+Out[27]: 'bar'
+In [28]: _i27
+Out[28]: u'foo'
+In [29]: _27
+Out[29]: 'bar'
+Since the input variables are strings, they can be executed again with the Python eval
+keyword:
+In [30]: eval(_i27)
+Out[30]: 'bar'
+Here, _i27 refers to the code input in In [27].
+Several magic functions allow you to work with the input and output history. %hist
+prints all or part of the input history, with or without line numbers. %reset clears the
+interactive namespace and optionally the input and output caches. The %xdel magic
+function removes all references to a particular object from the IPython machinery.
+See the documentation for these magics for more details.
+When working with very large datasets, keep in mind that IPy‐
+thon’s input and output history may cause objects referenced there
+to not be garbage collected (freeing up the memory), even if you
+delete the variables from the interactive namespace using the del
+keyword. In such cases, careful usage of %xdel and %reset can help
+you avoid running into memory problems.
+B.4 Interacting with the Operating System
+Another feature of IPython is that it allows you to access the filesystem and operating
+system shell. This means, among other things, that you can perform most standard
+command-line actions as you would in the Windows or Unix (Linux, macOS) shell
+without having to exit IPython. This includes shell commands, changing directories,
+and storing the results of a command in a Python object (list or string). There are also
+command aliasing and directory bookmarking features.
+See Table B-3 for a summary of magic functions and syntax for calling shell com‐
+mands. I’ll briefly visit these features in the next few sections.
+516 
+| 
+Appendix B: More on the IPython System
+Table B-3. IPython system-related commands
+Command
+Description
+!cmd
+Execute cmd in the system shell
+output = !cmd args
+Run cmd and store the stdout in output
+%alias alias_name cmd Define an alias for a system (shell) command
+%bookmark
+Utilize IPython’s directory bookmarking system
+%cd directory
+Change system working directory to passed directory
+%pwd
+Return to the current system working directory
+%pushd directory
+Place current directory on stack and change to target directory
+%popd
+Change to directory popped off the top of the stack
+%dirs
+Return a list containing the current directory stack
+%dhist
+Print the history of visited directories
+%env
+Return the system environment variables as a dictionary
+%matplotlib
+Configure matplotlib integration options
+Shell Commands and Aliases
+Starting a line in IPython with an exclamation point !, or bang, tells IPython to
+execute everything after the bang in the system shell. This means that you can delete
+files (using rm or del, depending on your OS), change directories, or execute any
+other process.
+You can store the console output of a shell command in a variable by assigning the
+expression escaped with ! to a variable. For example, on my Linux-based machine
+connected to the internet via Ethernet, I can get my IP address as a Python variable:
+In [1]: ip_info = !ifconfig wlan0 | grep "inet "
+In [2]: ip_info[0].strip()
+Out[2]: 'inet addr:10.0.0.11  Bcast:10.0.0.255  Mask:255.255.255.0'
+The returned Python object ip_info is actually a custom list type containing various
+versions of the console output.
+IPython can also substitute in Python values defined in the current environment
+when using !. To do this, preface the variable name with the dollar sign $:
+In [3]: foo = 'test*'
+In [4]: !ls $foo
+test4.py  test.py  test.xml
+The %alias magic function can define custom shortcuts for shell commands. As an
+example:
+In [1]: %alias ll ls -l
+More on the IPython System 
+| 
+517
+In [2]: ll /usr
+total 332
+drwxr-xr-x   2 root root  69632 2012-01-29 20:36 bin/
+drwxr-xr-x   2 root root   4096 2010-08-23 12:05 games/
+drwxr-xr-x 123 root root  20480 2011-12-26 18:08 include/
+drwxr-xr-x 265 root root 126976 2012-01-29 20:36 lib/
+drwxr-xr-x  44 root root  69632 2011-12-26 18:08 lib32/
+lrwxrwxrwx   1 root root      3 2010-08-23 16:02 lib64 -> lib/
+drwxr-xr-x  15 root root   4096 2011-10-13 19:03 local/
+drwxr-xr-x   2 root root  12288 2012-01-12 09:32 sbin/
+drwxr-xr-x 387 root root  12288 2011-11-04 22:53 share/
+drwxrwsr-x  24 root src    4096 2011-07-17 18:38 src/
+You can execute multiple commands just as on the command line by separating them
+with semicolons:
+In [558]: %alias test_alias (cd examples; ls; cd ..)
+In [559]: test_alias
+macrodata.csv  spx.csv
+tips.csv
+You’ll notice that IPython “forgets” any aliases you define interactively as soon as the
+session is closed. To create permanent aliases, you will need to use the configuration
+system.
+Directory Bookmark System
+IPython has a directory bookmarking system to enable you to save aliases for com‐
+mon directories so that you can jump around easily. For example, suppose you
+wanted to create a bookmark that points to the supplementary materials for this
+book:
+In [6]: %bookmark py4da /home/wesm/code/pydata-book
+Once you’ve done this, when you use the %cd magic, you can use any bookmarks
+you’ve defined:
+In [7]: cd py4da
+(bookmark:py4da) -> /home/wesm/code/pydata-book
+/home/wesm/code/pydata-book
+If a bookmark name conflicts with a directory name in your current working direc‐
+tory, you can use the -b flag to override and use the bookmark location. Using the -l
+option with %bookmark lists all of your bookmarks:
+In [8]: %bookmark -l
+Current bookmarks:
+py4da -> /home/wesm/code/pydata-book-source
+Bookmarks, unlike aliases, are automatically persisted between IPython sessions.
+518 
+| 
+Appendix B: More on the IPython System
+B.5 Software Development Tools
+In addition to being a comfortable environment for interactive computing and data
+exploration, IPython can also be a useful companion for general Python software
+development. In data analysis applications, it’s important first to have correct code.
+Fortunately, IPython has closely integrated and enhanced the built-in Python pdb
+debugger. Secondly, you want your code to be fast. For this, IPython has convenient
+integrated code timing and profiling tools. I will give an overview of these tools in
+detail here.
+Interactive Debugger
+IPython’s debugger enhances pdb with tab completion, syntax highlighting, and con‐
+text for each line in exception tracebacks. One of the best times to debug code is right
+after an error has occurred. The %debug command, when entered immediately after
+an exception, invokes the “postmortem” debugger and drops you into the stack frame
+where the exception was raised:
+In [2]: run examples/ipython_bug.py
+---------------------------------------------------------------------------
+AssertionError                            Traceback (most recent call last)
+/home/wesm/code/pydata-book/examples/ipython_bug.py in <module>()
+     13     throws_an_exception()
+     14
+---> 15 calling_things()
+/home/wesm/code/pydata-book/examples/ipython_bug.py in calling_things()
+     11 def calling_things():
+     12     works_fine()
+---> 13     throws_an_exception()
+     14
+     15 calling_things()
+/home/wesm/code/pydata-book/examples/ipython_bug.py in throws_an_exception()
+      7     a = 5
+      8     b = 6
+----> 9     assert(a + b == 10)
+     10
+     11 def calling_things():
+AssertionError:
+In [3]: %debug
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(9)throws_an_exception()
+      8     b = 6
+----> 9     assert(a + b == 10)
+     10
+ipdb>
+More on the IPython System 
+| 
+519
+Once inside the debugger, you can execute arbitrary Python code and explore all of
+the objects and data (which have been “kept alive” by the interpreter) inside each
+stack frame. By default you start in the lowest level, where the error occurred. By
+typing u (up) and d (down), you can switch between the levels of the stack trace:
+ipdb> u
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(13)calling_things()
+     12     works_fine()
+---> 13     throws_an_exception()
+     14
+Executing the %pdb command makes IPython automatically invoke the debugger after
+any exception, a mode that many users will find useful.
+It’s also helpful to use the debugger when developing code, especially when you need
+to set a breakpoint or step through the execution of a function or script to examine its
+behavior at each step. There are several ways to accomplish this. The first is by using
+%run with the -d flag, which invokes the debugger before executing any code in the
+passed script. You must immediately type s (step) to enter the script:
+In [5]: run -d examples/ipython_bug.py
+Breakpoint 1 at /home/wesm/code/pydata-book/examples/ipython_bug.py:1
+NOTE: Enter 'c' at the ipdb>  prompt to start your script.
+> <string>(1)<module>()
+ipdb> s
+--Call--
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(1)<module>()
+1---> 1 def works_fine():
+      2     a = 5
+      3     b = 6
+After this point, it’s up to you how you want to work your way through the file. For
+example, in the preceding exception, we could set a breakpoint right before calling
+the works_fine function, and run the script until we reach the breakpoint by typing c
+(continue):
+ipdb> b 12
+ipdb> c
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(12)calling_things()
+     11 def calling_things():
+2--> 12     works_fine()
+     13     throws_an_exception()
+At this point, you can step into works_fine() or execute works_fine() by typing n
+(next) to advance to the next line:
+ipdb> n
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(13)calling_things()
+2    12     works_fine()
+520 
+| 
+Appendix B: More on the IPython System
+---> 13     throws_an_exception()
+     14
+Then, we could step into throws_an_exception and advance to the line where the
+error occurs and look at the variables in the scope. Note that debugger commands
+take precedence over variable names; in such cases, preface the variables with ! to
+examine their contents:
+ipdb> s
+--Call--
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(6)throws_an_exception()
+      5
+----> 6 def throws_an_exception():
+      7     a = 5
+ipdb> n
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(7)throws_an_exception()
+      6 def throws_an_exception():
+----> 7     a = 5
+      8     b = 6
+ipdb> n
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(8)throws_an_exception()
+      7     a = 5
+----> 8     b = 6
+      9     assert(a + b == 10)
+ipdb> n
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(9)throws_an_exception()
+      8     b = 6
+----> 9     assert(a + b == 10)
+     10
+ipdb> !a
+5
+ipdb> !b
+6
+In my experience, developing proficiency with the interactive debugger takes time
+and practice. See Table B-4 for a full catalog of the debugger commands. If you are
+accustomed to using an IDE, you might find the terminal-driven debugger to be a
+bit unforgiving at first, but that will improve in time. Some of the Python IDEs have
+excellent GUI debuggers, so most users can find something that works for them.
+Table B-4. Python debugger commands
+Command
+Action
+h(elp)
+Display command list
+help command
+Show documentation for command
+c(ontinue)
+Resume program execution
+More on the IPython System 
+| 
+521
+Command
+Action
+q(uit)
+Exit debugger without executing any more code
+b(reak) number
+Set breakpoint at number in current file
+b path/to/file.py:number
+Set breakpoint at line number in specified file
+s(tep)
+Step into function call
+n(ext)
+Execute current line and advance to next line at current level
+u(p)/d(own)
+Move up/down in function call stack
+a(rgs)
+Show arguments for current function
+debug statement
+Invoke statement statement in new (recursive) debugger
+l(ist) statement
+Show current position and context at current level of stack
+w(here)
+Print full stack trace with context at current position
+Other ways to use the debugger
+There are a couple of other useful ways to invoke the debugger. The first is by using
+a special set_trace function (named after pdb.set_trace), which is basically a “poor
+man’s breakpoint.” Here are two small recipes you might want to put somewhere for
+your general use (potentially adding them to your IPython profile, as I do):
+from IPython.core.debugger import Pdb
+def set_trace():
+    Pdb(.set_trace(sys._getframe().f_back)
+def debug(f, *args, **kwargs):
+    pdb = Pdb()
+    return pdb.runcall(f, *args, **kwargs)
+The first function, set_trace, provides a convenient way to put a breakpoint some‐
+where in your code. You can use a set_trace in any part of your code that you want
+to temporarily stop to examine it more closely (e.g., right before an exception occurs):
+In [7]: run examples/ipython_bug.py
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(16)calling_things()
+     15     set_trace()
+---> 16     throws_an_exception()
+     17
+Typing c (continue) will cause the code to resume normally with no harm done.
+The debug function we just looked at enables you to invoke the interactive debugger
+easily on an arbitrary function call. Suppose we had written a function like the
+following, and we wished to step through its logic:
+def f(x, y, z=1):
+    tmp = x + y
+    return tmp / z
+522 
+| 
+Appendix B: More on the IPython System
+Ordinarily using f would look like f(1, 2, z=3). To instead step into f, pass f as
+the first argument to debug, followed by the positional and keyword arguments to be
+passed to f:
+In [6]: debug(f, 1, 2, z=3)
+> <ipython-input>(2)f()
+      1 def f(x, y, z):
+----> 2     tmp = x + y
+      3     return tmp / z
+ipdb>
+These two recipes have saved me a lot of time over the years.
+Lastly, the debugger can be used in conjunction with %run. By running a script with
+%run -d, you will be dropped directly into the debugger, ready to set any breakpoints
+and start the script:
+In [1]: %run -d examples/ipython_bug.py
+Breakpoint 1 at /home/wesm/code/pydata-book/examples/ipython_bug.py:1
+NOTE: Enter 'c' at the ipdb>  prompt to start your script.
+> <string>(1)<module>()
+ipdb>
+Adding -b with a line number starts the debugger with a breakpoint set already:
+In [2]: %run -d -b2 examples/ipython_bug.py
+Breakpoint 1 at /home/wesm/code/pydata-book/examples/ipython_bug.py:2
+NOTE: Enter 'c' at the ipdb>  prompt to start your script.
+> <string>(1)<module>()
+ipdb> c
+> /home/wesm/code/pydata-book/examples/ipython_bug.py(2)works_fine()
+      1 def works_fine():
+1---> 2     a = 5
+      3     b = 6
+ipdb>
+Timing Code: %time and %timeit
+For larger-scale or longer-running data analysis applications, you may wish to meas‐
+ure the execution time of various components or of individual statements or function
+calls. You may want a report of which functions are taking up the most time in
+a complex process. Fortunately, IPython enables you to get this information conven‐
+iently while you are developing and testing your code.
+Timing code by hand using the built-in time module and its functions, time.clock
+and time.time, is often tedious and repetitive, as you must write the same uninterest‐
+ing boilerplate code:
+More on the IPython System 
+| 
+523
+import time
+start = time.time()
+for i in range(iterations):
+    # some code to run here
+elapsed_per = (time.time() - start) / iterations
+Since this is such a common operation, IPython has two magic functions, %time and
+%timeit, to automate this process for you.
+%time runs a statement once, reporting the total execution time. Suppose we had
+a large list of strings, and we wanted to compare different methods of selecting all
+strings starting with a particular prefix. Here is a list of 600,000 strings and two
+identical methods of selecting only the ones that start with 'foo':
+# a very large list of strings
+In [11]: strings = ['foo', 'foobar', 'baz', 'qux',
+   ....:            'python', 'Guido Van Rossum'] * 100000
+In [12]: method1 = [x for x in strings if x.startswith('foo')]
+In [13]: method2 = [x for x in strings if x[:3] == 'foo']
+It looks like they should be about the same performance-wise, right? We can check
+for sure using %time:
+In [14]: %time method1 = [x for x in strings if x.startswith('foo')]
+CPU times: user 52.5 ms, sys: 0 ns, total: 52.5 ms
+Wall time: 52.1 ms
+In [15]: %time method2 = [x for x in strings if x[:3] == 'foo']
+CPU times: user 65.3 ms, sys: 0 ns, total: 65.3 ms
+Wall time: 64.8 ms
+The Wall time (short for “wall-clock time”) is the main number of interest. From
+these timings, we can infer that there is some performance difference, but it’s not
+a very precise measurement. If you try %time-ing those statements multiple times
+yourself, you’ll find that the results are somewhat variable. To get a more precise
+measurement, use the %timeit magic function. Given an arbitrary statement, it has
+a heuristic to run a statement multiple times to produce a more accurate average
+runtime (these results may be different on your system):
+In [563]: %timeit [x for x in strings if x.startswith('foo')]
+10 loops, best of 3: 159 ms per loop
+In [564]: %timeit [x for x in strings if x[:3] == 'foo']
+10 loops, best of 3: 59.3 ms per loop
+This seemingly innocuous example illustrates that it is worth understanding the
+performance characteristics of the Python standard library, NumPy, pandas, and
+other libraries used in this book. In larger-scale data analysis applications, those
+milliseconds will start to add up!
+524 
+| 
+Appendix B: More on the IPython System
+%timeit is especially useful for analyzing statements and functions with very short
+execution times, even at the level of microseconds (millionths of a second) or
+nanoseconds (billionths of a second). These may seem like insignificant amounts
+of time, but of course a 20-microsecond function invoked 1 million times takes 15
+seconds longer than a 5-microsecond function. In the preceding example, we could
+very directly compare the two string operations to understand their performance
+characteristics:
+In [565]: x = 'foobar'
+In [566]: y = 'foo'
+In [567]: %timeit x.startswith(y)
+1000000 loops, best of 3: 267 ns per loop
+In [568]: %timeit x[:3] == y
+10000000 loops, best of 3: 147 ns per loop
+Basic Profiling: %prun and %run -p
+Profiling code is closely related to timing code, except it is concerned with determin‐
+ing where time is spent. The main Python profiling tool is the cProfile module,
+which is not specific to IPython at all. cProfile executes a program or any arbitrary
+block of code while keeping track of how much time is spent in each function.
+A common way to use cProfile is on the command line, running an entire program
+and outputting the aggregated time per function. Suppose we had a script that does
+some linear algebra in a loop (computing the maximum absolute eigenvalues of a
+series of 100 × 100 matrices):
+import numpy as np
+from numpy.linalg import eigvals
+def run_experiment(niter=100):
+    K = 100
+    results = []
+    for _ in range(niter):
+        mat = np.random.standard_normal((K, K))
+        max_eigenvalue = np.abs(eigvals(mat)).max()
+        results.append(max_eigenvalue)
+    return results
+some_results = run_experiment()
+print('Largest one we saw: {0}'.format(np.max(some_results)))
+You can run this script through cProfile using the following in the command line:
+python -m cProfile cprof_example.py
+More on the IPython System 
+| 
+525
+If you try that, you’ll find that the output is sorted by function name. This makes it a
+bit hard to get an idea of where the most time is spent, so it’s useful to specify a sort
+order using the -s flag:
+$ python -m cProfile -s cumulative cprof_example.py
+Largest one we saw: 11.923204422
+    15116 function calls (14927 primitive calls) in 0.720 seconds
+Ordered by: cumulative time
+ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     1    0.001    0.001    0.721    0.721 cprof_example.py:1(<module>)
+   100    0.003    0.000    0.586    0.006 linalg.py:702(eigvals)
+   200    0.572    0.003    0.572    0.003 {numpy.linalg.lapack_lite.dgeev}
+     1    0.002    0.002    0.075    0.075 __init__.py:106(<module>)
+   100    0.059    0.001    0.059    0.001 {method 'randn')
+     1    0.000    0.000    0.044    0.044 add_newdocs.py:9(<module>)
+     2    0.001    0.001    0.037    0.019 __init__.py:1(<module>)
+     2    0.003    0.002    0.030    0.015 __init__.py:2(<module>)
+     1    0.000    0.000    0.030    0.030 type_check.py:3(<module>)
+     1    0.001    0.001    0.021    0.021 __init__.py:15(<module>)
+     1    0.013    0.013    0.013    0.013 numeric.py:1(<module>)
+     1    0.000    0.000    0.009    0.009 __init__.py:6(<module>)
+     1    0.001    0.001    0.008    0.008 __init__.py:45(<module>)
+   262    0.005    0.000    0.007    0.000 function_base.py:3178(add_newdoc)
+   100    0.003    0.000    0.005    0.000 linalg.py:162(_assertFinite)
+   ...
+Only the first 15 rows of the output are shown. It’s easiest to read by scanning down
+the cumtime column to see how much total time was spent inside each function. Note
+that if a function calls some other function, the clock does not stop running. cProfile
+records the start and end time of each function call and uses that to produce the
+timing.
+In addition to the command-line usage, cProfile can also be used programmatically
+to profile arbitrary blocks of code without having to run a new process. IPython has a
+convenient interface to this capability using the %prun command and the -p option to
+%run. %prun takes the same “command-line options” as cProfile but will profile an
+arbitrary Python statement instead of a whole .py file:
+In [4]: %prun -l 7 -s cumulative run_experiment()
+         4203 function calls in 0.643 seconds
+Ordered by: cumulative time
+List reduced from 32 to 7 due to restriction <7>
+ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     1    0.000    0.000    0.643    0.643 <string>:1(<module>)
+     1    0.001    0.001    0.643    0.643 cprof_example.py:4(run_experiment)
+   100    0.003    0.000    0.583    0.006 linalg.py:702(eigvals)
+   200    0.569    0.003    0.569    0.003 {numpy.linalg.lapack_lite.dgeev}
+526 
+| 
+Appendix B: More on the IPython System
+   100    0.058    0.001    0.058    0.001 {method 'randn'}
+   100    0.003    0.000    0.005    0.000 linalg.py:162(_assertFinite)
+   200    0.002    0.000    0.002    0.000 {method 'all' of 'numpy.ndarray'}
+Similarly, calling %run -p -s cumulative cprof_example.py has the same effect as
+the command-line approach, except you never have to leave IPython.
+In the Jupyter notebook, you can use the %%prun magic (two % signs) to profile an
+entire code block. This pops up a separate window with the profile output. This can
+be useful in getting possibly quick answers to questions like, “Why did that code
+block take so long to run?”
+There are other tools available that help make profiles easier to understand when you
+are using IPython or Jupyter. One of these is SnakeViz, which produces an interactive
+visualization of the profile results using D3.js.
+Profiling a Function Line by Line
+In some cases, the information you obtain from %prun (or another cProfile-based
+profile method) may not tell the whole story about a function’s execution time, or
+it may be so complex that the results, aggregated by function name, are hard to
+interpret. For this case, there is a small library called line_profiler (obtainable via
+PyPI or one of the package management tools). It contains an IPython extension
+enabling a new magic function %lprun that computes a line-by-line-profiling of
+one or more functions. You can enable this extension by modifying your IPython
+configuration (see the IPython documentation or the section on configuration later in
+this appendix) to include the following line:
+# A list of dotted module names of IPython extensions to load.
+c.InteractiveShellApp.extensions = ['line_profiler']
+You can also run the command:
+%load_ext line_profiler
+line_profiler can be used programmatically (see the full documentation), but it
+is perhaps most powerful when used interactively in IPython. Suppose you had a
+module prof_mod with the following code doing some NumPy array operations (if
+you want to reproduce this example, put this code into a new file prof_mod.py):
+from numpy.random import randn
+def add_and_sum(x, y):
+    added = x + y
+    summed = added.sum(axis=1)
+    return summed
+def call_function():
+    x = randn(1000, 1000)
+More on the IPython System 
+| 
+527
+    y = randn(1000, 1000)
+    return add_and_sum(x, y)
+If we wanted to understand the performance of the add_and_sum function, %prun
+gives us the following:
+In [569]: %run prof_mod
+In [570]: x = randn(3000, 3000)
+In [571]: y = randn(3000, 3000)
+In [572]: %prun add_and_sum(x, y)
+         4 function calls in 0.049 seconds
+   Ordered by: internal time
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.036    0.036    0.046    0.046 prof_mod.py:3(add_and_sum)
+        1    0.009    0.009    0.009    0.009 {method 'sum' of 'numpy.ndarray'}
+        1    0.003    0.003    0.049    0.049 <string>:1(<module>)
+This is not especially enlightening. With the line_profiler IPython extension acti‐
+vated, a new command %lprun is available. The only difference in usage is that we
+must instruct %lprun which function or functions we wish to profile. The general
+syntax is:
+%lprun -f func1 -f func2 statement_to_profile
+In this case, we want to profile add_and_sum, so we run:
+In [573]: %lprun -f add_and_sum add_and_sum(x, y)
+Timer unit: 1e-06 s
+File: prof_mod.py
+Function: add_and_sum at line 3
+Total time: 0.045936 s
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+     3                                           def add_and_sum(x, y):
+     4         1        36510  36510.0     79.5      added = x + y
+     5         1         9425   9425.0     20.5      summed = added.sum(axis=1)
+     6         1            1      1.0      0.0      return summed
+This can be much easier to interpret. In this case, we profiled the same function
+we used in the statement. Looking at the preceding module code, we could call
+call_function and profile that as well as add_and_sum, thus getting a full picture of
+the performance of the code:
+In [574]: %lprun -f add_and_sum -f call_function call_function()
+Timer unit: 1e-06 s
+File: prof_mod.py
+Function: add_and_sum at line 3
+Total time: 0.005526 s
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+528 
+| 
+Appendix B: More on the IPython System
+     3                                           def add_and_sum(x, y):
+     4         1         4375   4375.0     79.2      added = x + y
+     5         1         1149   1149.0     20.8      summed = added.sum(axis=1)
+     6         1            2      2.0      0.0      return summed
+File: prof_mod.py
+Function: call_function at line 8
+Total time: 0.121016 s
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+     8                                           def call_function():
+     9         1        57169  57169.0     47.2      x = randn(1000, 1000)
+    10         1        58304  58304.0     48.2      y = randn(1000, 1000)
+    11         1         5543   5543.0      4.6      return add_and_sum(x, y)
+As a general rule of thumb, I tend to prefer %prun (cProfile) for “macro” profiling,
+and %lprun (line_profiler) for “micro” profiling. It’s worthwhile to have a good
+understanding of both tools.
+The reason that you must explicitly specify the names of the func‐
+tions you want to profile with %lprun is that the overhead of
+“tracing” the execution time of each line is substantial. Tracing
+functions that are not of interest has the potential to significantly
+alter the profile results.
+B.6 Tips for Productive Code Development Using IPython
+Writing code in a way that makes it convenient to develop, debug, and ultimately
+use interactively may be a paradigm shift for many users. There are procedural
+details like code reloading that may require some adjustment, as well as coding style
+concerns.
+Therefore, implementing most of the strategies described in this section is more of an
+art than a science and will require some experimentation on your part to determine
+a way to write your Python code that is effective for you. Ultimately you want to
+structure your code in a way that makes it convenient to use iteratively and be able to
+explore the results of running a program or function as effortlessly as possible. I have
+found software designed with IPython in mind to be easier to work with than code
+intended only to be run as as standalone command-line application. This becomes
+especially important when something goes wrong and you have to diagnose an error
+in code that you or someone else might have written months or years beforehand.
+Reloading Module Dependencies
+In Python, when you type import some_lib, the code in some_lib is executed,
+and all the variables, functions, and imports defined within are stored in the newly
+created some_lib module namespace. The next time you use import some_lib,
+More on the IPython System 
+| 
+529
+1 Since a module or package may be imported in many different places in a particular program, Python caches
+a module’s code the first time it is imported rather than executing the code in the module every time.
+Otherwise, modularity and good code organization could potentially cause inefficiency in an application.
+you will get a reference to the existing module namespace. The potential difficulty
+in interactive IPython code development comes when you, say, %run a script that
+depends on some other module where you may have made changes. Suppose I had
+the following code in test_script.py:
+import some_lib
+x = 5
+y = [1, 2, 3, 4]
+result = some_lib.get_answer(x, y)
+If you were to execute %run test_script.py then modify some_lib.py, the next time
+you execute %run test_script.py you will still get the old version of some_lib.py
+because of Python’s “load-once” module system. This behavior differs from some
+other data analysis environments, like MATLAB, which automatically propagate code
+changes.1 To cope with this, you have a couple of options. The first way is to use the
+reload function in the importlib module in the standard library:
+import some_lib
+import importlib
+importlib.reload(some_lib)
+This attempts to give you a fresh copy of some_lib.py every time you run test_script.py
+(but there are some scenarios where it will not). Obviously, if the dependencies go
+deeper, it might be a bit tricky to be inserting usages of reload all over the place.
+For this problem, IPython has a special dreload function (not a magic function)
+for “deep” (recursive) reloading of modules. If I were to run some_lib.py then use dre
+load(some_lib), it will attempt to reload some_lib as well as all of its dependencies.
+This will not work in all cases, unfortunately, but when it does, it beats having to
+restart IPython.
+Code Design Tips
+There’s no simple recipe for this, but here are some high-level principles I have found
+effective in my own work.
+Keep relevant objects and data alive
+It’s not unusual to see a program written for the command line with a structure
+somewhat like the following:
+530 
+| 
+Appendix B: More on the IPython System
+from my_functions import g
+def f(x, y):
+    return g(x + y)
+def main():
+    x = 6
+    y = 7.5
+    result = x + y
+if __name__ == '__main__':
+    main()
+Do you see what might go wrong if we were to run this program in IPython? After
+it’s done, none of the results or objects defined in the main function will be accessible
+in the IPython shell. A better way is to have whatever code is in main execute directly
+in the module’s global namespace (or in the if __name__ == '__main__': block, if
+you want the module to also be importable). That way, when you %run the code, you’ll
+be able to look at all of the variables defined in main. This is equivalent to defining
+top-level variables in cells in the Jupyter notebook.
+Flat is better than nested
+Deeply nested code makes me think about the many layers of an onion. When testing
+or debugging a function, how many layers of the onion must you peel back in order
+to reach the code of interest? The idea that “flat is better than nested” is a part of
+the Zen of Python, and it applies generally to developing code for interactive use as
+well. Making functions and classes as decoupled and modular as possible makes them
+easier to test (if you are writing unit tests), debug, and use interactively.
+Overcome a fear of longer files
+If you come from a Java (or another such language) background, you may have been
+told to keep files short. In many languages, this is sound advice; long length is usually
+a bad “code smell,” indicating refactoring or reorganization may be necessary. How‐
+ever, while developing code using IPython, working with 10 small but interconnected
+files (under, say, 100 lines each) is likely to cause you more headaches in general
+than 2 or 3 longer files. Fewer files means fewer modules to reload and less jumping
+between files while editing, too. I have found maintaining larger modules, each with
+high internal cohesion (the code all relates to solving the same kinds of problems),
+to be much more useful and Pythonic. After iterating toward a solution, of course it
+sometimes will make sense to refactor larger files into smaller ones.
+Obviously, I don’t support taking this argument to the extreme, which would to be
+to put all of your code in a single monstrous file. Finding a sensible and intuitive
+module and package structure for a large codebase often takes a bit of work, but
+it is especially important to get right in teams. Each module should be internally
+More on the IPython System 
+| 
+531
+cohesive, and it should be as obvious as possible where to find functions and classes
+responsible for each area of functionality.
+B.7 Advanced IPython Features
+Making full use of the IPython system may lead you to write your code in a slightly
+different way, or to dig into the configuration.
+Profiles and Configuration
+Most aspects of the appearance (colors, prompt, spacing between lines, etc.) and
+behavior of the IPython and Jupyter environments are configurable through an
+extensive configuration system. Here are some things you can do via configuration:
+• Change the color scheme
+•
+• Change how the input and output prompts look, or remove the blank line after
+•
+Out and before the next In prompt
+• Execute an arbitrary list of Python statements (e.g., imports that you use all the
+•
+time or anything else you want to happen each time you launch IPython)
+• Enable always-on IPython extensions, like the %lprun magic in line_profiler
+•
+• Enable Jupyter extensions
+•
+• Define your own magics or system aliases
+•
+Configurations for the IPython shell are specified in special ipython_config.py files,
+which are usually found in the .ipython/ directory in your user home directory.
+Configuration is performed based on a particular profile. When you start IPython
+normally, you load up, by default, the default profile, stored in the profile_default
+directory. Thus, on my Linux OS, the full path to my default IPython configuration
+file is:
+/home/wesm/.ipython/profile_default/ipython_config.py
+To initialize this file on your system, run this in the terminal:
+ipython profile create default
+I’ll spare you the complete details of what’s in this file. Fortunately, it has comments
+describing what each configuration option is for, so I will leave it to the reader
+to tinker and customize. One additional useful feature is that it’s possible to have
+multiple profiles. Suppose you wanted to have an alternative IPython configuration
+tailored for a particular application or project. Creating a new profile involves typing
+the following:
+ipython profile create secret_project
+532 
+| 
+Appendix B: More on the IPython System
+Once you’ve done this, edit the config files in the newly created profile_secret_project
+directory and then launch IPython, like so:
+$ ipython --profile=secret_project
+Python 3.8.0 | packaged by conda-forge | (default, Nov 22 2019, 19:11:19)
+Type 'copyright', 'credits' or 'license' for more information
+IPython 7.22.0 -- An enhanced Interactive Python. Type '?' for help.
+IPython profile: secret_project
+As always, the online IPython documentation is an excellent resource for more on
+profiles and configuration.
+Configuration for Jupyter works a little differently because you can use its notebooks
+with languages other than Python. To create an analogous Jupyter config file, run:
+jupyter notebook --generate-config
+This writes a default config file to the .jupyter/jupyter_notebook_config.py directory in
+your home directory. After editing this to suit your needs, you may rename it to a
+different file, like:
+$ mv ~/.jupyter/jupyter_notebook_config.py ~/.jupyter/my_custom_config.py
+When launching Jupyter, you can then add the --config argument:
+jupyter notebook --config=~/.jupyter/my_custom_config.py
+B.8 Conclusion
+As you work through the code examples in this book and grow your skills as a
+Python programmer, I encourage you to keep learning about the IPython and Jupyter
+ecosystems. Since these projects have been designed to assist user productivity, you
+may discover tools that enable you to do your work more easily than using the
+Python language and its computational libraries by themselves.
+You can also find a wealth of interesting Jupyter notebooks on the nbviewer website.
+More on the IPython System 
+| 
+533
+Index
+Symbols
+! (exclamation point) for shell commands, 516
+!= (not equal to), 32
+" (double quote)
+multiline strings, 35
+string literals declared, 35
+# (hash mark) for comment, 27
+$ (dollar sign) for shell environment, 517
+% (percent)
+datetime formatting, 359
+IPython magic commands, 510-511
+%bookmark, 518
+Ctrl-C to interrupt running code, 513
+%debug, 519-523
+executing code from clipboard, 513
+%lprun, 527-529
+operating system commands, 516
+%prun, 525-527
+%run, 19, 512
+%run -p, 525-527
+%time and %timeit, 523-525
+& (ampersand)
+AND, 32
+NumPy ndarrays, 99
+intersection of two sets, 60
+' (single quote)
+multiline strings, 35
+string literals declared, 35
+( ) parentheses
+calling functions and object methods, 28
+intervals open (exclusive), 216
+method called on results, 218
+tuples, 47-50
+tuples of exception types, 75
+* (asterisk)
+multiplication, 32
+tuple by integer, 49
+two-dimensional arrays, 116
+namespace search in IPython, 26
+raising to the power, 32
+rest in tuples, 50
++ (plus) operator, 32
+adding strings, 37
+lists, 53
+Patsy’s formulas, 408
+I() wrapper for addition, 412
+timedelta type, 42
+tuple concatenation, 49
+- (minus) operator, 32
+sets, 60
+timedelta type, 41
+/ (slash) division operator, 32
+floor (//), 35
+: (colon)
+arrays returned in reverse order, 497
+code blocks, 26
+dictionaries, 55
+; (semicolon) for multiple statements, 27
+< (less than) operator, 32
+set elements, 60
+= (equal sign)
+test for equality, 32
+variable assignment, 28
+unpacking tuples, 49
+> (greater than) operator, 32
+set elements, 60
+? (question mark)
+namespace search in IPython, 26
+535
+object introspection in IPython, 25
+@ (at) infix operator, 103
+[ ] (square brackets)
+arrays returned in reverse order, 497
+(see also arrays)
+intervals closed (inclusive), 216
+list definitions, 51
+slicing lists, 54
+loc and iloc operators, 143, 145
+series indexing, 142
+string element index, 234
+string slicing, 234
+tuple elements, 48
+\ (backslash) escaping in strings, 37
+\n (newline character) counted, 36
+^ (caret) operator, 32
+symmetric difference between sets, 60
+_ (underscore)
+data types with trailing underscores, 475
+tab completion and, 24
+unwanted variables, 50
+{ } (curly braces)
+code blocks surrounded by, 26
+dictionaries, 55
+formatting strings, 37
+sets, 59
+| (vertical bar)
+OR, 32
+NumPy ndarrays, 99
+union of two sets, 60
+~ (tilde) as NumPy negation operator, 98
+A
+accumulate() (NumPy ufunc), 491
+add() (NumPy ufunc), 105
+add() (sets), 60
+addition (see plus (+) operator)
+add_constant() (statsmodels), 416
+add_subplot() (matplotlib), 283
+AxesSubplot objects returned, 285
+aggregate() or agg(), 330, 349
+aggregation of data, 329
+about, 319
+agg(), 330, 349
+column-wise, 331
+describe(), 331, 337
+downsampling, 388-391
+groupby() methods, 329
+(see also group operations)
+example of group operation, 320
+indexing a GroupBy object, 326
+moving window functions, 396-403
+multiple functions, 331
+NumPy array methods, 111
+open-high-low-close resampling, 391
+performance and, 331
+performance of aggregation functions, 350
+pivot tables, 352
+about, 351
+cross-tabulations, 354
+hierarchical indexing, 249
+returning without row indexes, 335
+upsampling, 391
+%alias command, 517
+Altair for visualization, 317
+ampersand (&)
+AND, 32
+intersection of two sets, 60
+NumPy ndarrays, 99
+anchored offsets in frequencies, 371
+shifting dates with offsets, 373
+annotate() (matplotlib), 294
+anonymous (lambda) functions, 70
+Apache Parquet
+read_parquet(), 194
+remote servers for processing data, 197
+APIs
+importing, 32
+(see also modules)
+matplotlib primer, 282-297
+web API interactions, 197-199
+apply() (GroupBy), 335
+apply() (moving window functions), 402
+arange() (NumPy), 85, 88
+argsort() (NumPy), 497
+array() (NumPy), 86
+arrays
+aggregations defined, 329
+(see also aggregation of data)
+associative arrays, 55
+(see also dictionaries)
+dates, 360
+moving window functions, 396-403
+binary, 401
+expanding window mean, 398
+exponentially weighted functions, 399
+rolling operator, 396, 398
+user-defined, 402
+536 
+| 
+Index
+NumPy ndarrays, 85
+(see also ndarrays)
+pandas Series, 5, 124
+(see also Series)
+PandasArray, 125
+PeriodIndex created from, 385
+striding information of ndarrays, 473
+structured ndarrays, 493
+(see also structured ndarrays)
+asfreq(), 380, 391
+associative arrays, 55
+(see also dictionaries)
+asterisk (*)
+multiplication, 32
+tuple by integer, 49
+two-dimensional arrays, 116
+namespace search in IPython, 26
+raising to the power, 32
+rest in tuples, 50
+astype() for extension data types, 226, 238
+at (@) infix operator, 103
+attributes of Python objects, 30
+AxesSubplot objects, 285
+B
+baby names in US dataset, 443-456
+naming trends analysis, 448-456
+gender and naming, 455
+increase in diversity, 449
+last letter revolution, 452
+backslash (\) escaping in strings, 37
+bang (!) for shell commands, 516
+bar plots
+pandas, 301-306
+seaborn, 306
+value_counts() for, 304
+barplot() (seaborn), 306
+base frequencies, 370
+Beazley, David, 18
+binary data formats
+about non-pickle formats, 194
+HDF5 format, 195-197, 504
+Microsoft Excel files, 194
+ndarrays saved, 116
+memory-mapped files, 503
+Parquet (Apache)
+read_parquet(), 194
+remote servers for processing data, 197
+pickle format, 193
+caution about, 193
+plots saved to files, 296
+binary operators of Python, 32
+binary ufuncs, 105
+methods, 106, 490-492
+binding of variables, 29
+binning data, 215, 338-340, 500
+Bitly links with .gov or .mil dataset, 425-435
+counting time zones in Python, 426
+counting time zones with pandas, 428-435
+Bokeh for visualization, 317
+book website, 9, 15
+%bookmark command, 518
+bool scalar type, 34, 39
+type casting, 40
+BooleanDtype extension data type, 226
+box plots, 315
+braces (see curly braces)
+brackets (see square brackets)
+break keyword
+for loops, 43
+while loops, 44
+breakpoint in code, 522
+broadcasting, 484-489
+about, 92, 156
+performance tip, 505
+broadcasting rule, 485
+over other axes, 487
+setting array values via, 489
+build_design_matrices() (Patsy), 411
+bytes scalar type, 34, 38
+C
+C/C#/C++ languages
+about legacy libraries, 3
+HDF5 C library, 195
+NumPy arrays, 4, 83, 89
+performance tip, 505
+Cython for C-like performance, 505
+card deck draw example, 343
+caret (^) operator, 32
+symmetric difference between sets, 60
+casting and conversions of variables, 30
+cat (Unix) to print file to screen, 177, 184
+categorical data
+any immutable data types, 240
+background, 236
+category codes, 237
+Categorical extension data type, 237
+Index 
+| 
+537
+cut() and groupby(), 339-340
+modeling nonnumeric column, 407
+sequences into, 239
+computations with, 240
+performance improvement with, 241
+dict() for code and category mapping, 239
+meaningful order, 239
+methods, 242-245
+Patsy’s formulas, 412-415
+visualizing with facet grids, 314-316
+Categorical extension data type, 237
+computations with, 240
+performance improvement with, 241
+cut() and groupby(), 339-340
+modeling nonnumeric column, 407
+sequences into, 239
+CategoricalDtype extension data type, 226
+catplot() (seaborn), 314
+center() (Patsy), 411
+chain() (itertools), 73
+Circle() (matplotlib), 295
+clear() for sets, 60
+clipboard code executed, 513
+close() an open file, 77
+closed property, 79
+collections
+built-in sequence functions, 62
+dictionaries, 55-59
+list comprehensions, 63
+sets, 59-61
+colon (:)
+arrays returned in reverse order, 497
+code blocks, 26
+dictionaries, 55
+colors for plot(), 288
+combinations() (itertools), 73
+combine_first(), 269
+command history of IPython, 514-516
+input and output variables, 515
+searching and reusing, 514
+comment preceded by hash mark (#), 27
+comprehensions for lists, sets, dictionaries, 63
+nested, 64
+concat() (pandas), 264-268
+concatenate() for ndarrays, 263, 479
+r_ and c_ objects, 480
+conda
+about Miniconda, 9
+(see also Miniconda)
+activate to activate environment, 11
+create to create new environment, 11
+install, 12
+necessary packages, 11
+recommended over pip, 12
+updating packages, 12
+configuration of IPython, 532
+configuration of Jupyter notebooks, 533
+console output to variable, 517
+contiguous memory importance, 505
+continue keyword in for loops, 43
+control flow in Python, 42-45
+NumPy array vectorized version, 110
+corr(), 169, 346, 401
+correlation and covariance with pandas,
+168-170
+binary moving window functions, 401
+group weighted average and correlation,
+344-346
+count()
+newlines in multiline string, 36
+nonnull values in groups, 324
+substring occurrences, 228
+tuple method, 50
+cov(), 169
+covariance and correlation with pandas,
+168-170
+cProfile module, 525-527
+cross-validation in model training, 422
+crosstab(), 354
+frequency table via, 304
+cross_val_score() (scikit-learn), 423
+CSV (comma-separated values) files
+reading CSV files
+about Python files, 73
+defining format and delimiter, 186
+other delimited formats, 185
+reading in pieces, 182
+read_csv(), 177-181
+read_csv() arguments, 181
+writing CSV files, 184
+other delimited formats, 187
+csv module
+Dialect, 186
+option possibilities chart, 186
+importing, 185
+opening file with single-character delimiter,
+185
+Ctrl-C to interrupt running code, 513
+538 
+| 
+Index
+Ctrl-D to exit Python shell, 11, 18
+curly braces ({ })
+code blocks surrounded by, 26
+dictionaries, 55
+formatting strings, 37
+sets, 59
+cut() to divide data into bins, 215
+groupby() with, 338-340
+qcut() per quantiles, 216
+Cython for C-like performance, 505
+D
+data
+about structured data, 1
+aggregation (see aggregation of data)
+arrays (see arrays)
+combining and merging datasets
+about, 253
+combining with overlap, 268
+concatenating along an axis, 263-268
+joins, 254-258
+merge key(s) in index, 259-263
+datasets on GitHub, 15
+zip files, 15
+dictionaries, 55-59
+example datasets
+about, 425
+Bitly links with .gov or .mil, 425-435
+Federal Election Commission (2012),
+463-472
+MovieLens, 435-442
+US baby names, 443-456
+USDA food database, 457-462
+feature engineering in modeling, 405
+Kaggle competition dataset, 420
+lists, 51-55
+loading, 175
+(see also reading data from a file)
+missing data (see missing data)
+preparation (see data preparation)
+repeated instances of values, 236
+(see also categorical data)
+reshaping and pivoting
+hierarchical indexing for, 249, 270-273
+pivoting long to wide format, 273-277
+pivoting wide to long format, 277-278
+scalars, 34-42
+type casting, 40
+sequence functions built in, 62
+sets, 59-61
+shifting through time, 371-374
+time series, 357
+(see also time series)
+tuples, 47-50
+variables as objects, 28
+dynamic references, strong types, 29
+data analysis
+about Python, 2
+drawbacks, 3
+about the book, 1
+categorical data background, 236
+(see also categorical data)
+email lists, 13
+example datasets
+about, 425
+Bitly links with .gov or .mil, 425-435
+Federal Election Commission (2012),
+463-472
+MovieLens, 435-442
+US baby names, 443-456
+USDA food database, 457-462
+data loading, 175
+(see also reading data from a file)
+data preparation
+about, 203
+categorical data
+background, 236
+Categorical extension data type, 237
+computations with, 240
+meaningful order, 239
+methods, 242-245
+performance improvement with, 241
+combining and merging datasets
+about, 253
+combining with overlap, 268
+concatenating along an axis, 263-268
+joins, 254-258
+merge key(s) in index, 259-263
+data transformation
+aggregations defined, 329
+(see also aggregation of data)
+axis index map(), 214
+categorical variable into dummy matrix,
+221
+discretization and binning, 215, 338-340,
+500
+duplicates removed, 209
+mapping or function for, 211
+Index 
+| 
+539
+outlier detection and filtering, 217
+permutation, 219
+random sampling, 220
+replacing values, 212
+extension data types, 224, 233
+missing data, 203
+(see also missing data)
+reshaping and pivoting
+hierarchical indexing for, 249, 270-273
+pivoting long to wide format, 273-277
+pivoting wide to long format, 277-278
+string manipulation
+built-in string object methods, 227
+regular expressions, 229-232
+string functions in pandas, 232-234
+Data Science from Scratch: First Principles with
+Python (Grus), 423
+data types
+about NumPy, 89
+DataFrame to_numpy(), 136
+date and time, 358
+dtype property, 86, 87, 88-91, 473
+extension data types, 224, 233
+NaN for missing data, 203
+NumPy ndarrays, 87, 88-91, 473
+hierarchy of data types, 474
+type casting, 90
+ValueError, 91
+structured ndarrays, 493
+(see also structured ndarrays)
+time and date, 358
+trailing underscores in names, 475
+type casting, 40
+NumPy ndarrays, 90
+type inference in reading text data, 177
+database interactions, 199-201
+DataFrames (pandas), 129-136
+about, 5, 6
+apply() function, 158
+applymap() for element-wise functions, 159
+arithmetic, 152
+with fill values, 154
+arithmetic methods chart, 155
+arithmetic with Series, 156
+axis indexes with duplicate labels, 164
+categorical data from column, 239
+chained indexing pitfalls, 151
+columns retrieved as Series, 131
+concatenating along an axis, 263-268
+constructing, 129
+possible data inputs chart, 135
+dropping entries from an axis, 141
+duplicate rows removed, 209
+get() HTTP request data, 198
+get_dummies(), 221
+HDF5 binary data format, 195
+head() and tail(), 130
+hierarchical indexing, 129, 248
+indexing with columns, 252
+reordering and sorting levels, 250
+reshaping data, 249, 270-273
+summary statistics by level, 251
+importing into local namespace, 124
+Index objects, 136
+map() to transform data, 214
+indexes for row and column, 129
+hierarchical indexing, 129
+indexing options chart, 148
+integer indexing pitfalls, 149
+JSON data to and from, 188
+Jupyter notebook display of, 129
+missing data
+dropna() to filter out, 205-207
+fillna() to fill in, 207-209
+NumPy ufuncs and, 158
+objects that have different indexes, 152
+outlier detection and filtering, 217
+ranking, 162
+reading data from a file (see reading data
+from a file)
+reindexing, 138
+selection with loc and iloc, 147
+row retrieval, 132
+sorting, 160
+SQL query results into, 199-201
+statistical methods
+correlation and covariance, 168-170
+summary statistics, 165-168
+summary statistics by level, 251
+to_numpy(), 135
+unique and other set logic, 170-173
+writing data to a file (see writing data to a
+file)
+date offset, 370
+periods, 380
+date type, 41-42, 359
+datetime module, 41-42, 358
+datetime type, 41-42, 359
+540 
+| 
+Index
+converting between string and, 359-361
+formatting as string, 41, 359-361
+immutable, 41
+ISO 8601 format parsed, 360
+locale-specific formatting options, 361
+shifting dates with offsets, 373
+time series basics, 362
+DatetimeIndex, 362
+DatetimeTZDtype extension data type, 226
+date_range(), 367
+normalize option, 369
+%debug command, 519-523
+debug() to call debugger, 522
+debugger in IPython, 519-523
+chart of commands, 521
+deck of card random sampling example, 343
+def to declare a function, 66
+delimiters separating text fields
+reading a CSV file, 179
+reading other delimited formats, 185
+writing a CSV file, 184
+writing other delimited formats, 187
+density plots and histograms, 309-310
+describe() in aggregated data, 331, 337
+descriptive statistics with pandas, 165-168
+DesignMatrix instances of Patsy, 408
+development environment, 12
+(see also software development tools)
+dict(), 57
+categorical data, 239
+dictionaries (dict), 55-59
+DataFrame as dictionary of Series, 129
+constructing a DataFrame, 129
+defaultdict(), 58
+dictionary comprehensions, 63
+reading data from delimited file, 186
+get() HTTP request data, 198
+get() versus pop() when key not present, 58
+grouping via, 327
+HDF5 binary data format, 195
+keys() and values(), 56
+merging, 57
+pandas Series as, 126
+Series from and to dictionary, 126
+sequences into, 57
+setdefault(), 58
+valid key types, 59
+difference() for sets, 60
+DataFrame method, 137
+difference_update() for sets, 60
+dimension tables, 236
+division
+division operator (/), 32
+floor (//), 32, 35
+integer division, 35
+dmatrices() (Patsy), 408
+documentation online
+IPython, 24
+pandas, 358
+Python
+formatting strings, 38
+itertools functions, 73
+dollar sign ($) for shell environment, 517
+dot() (NumPy) for matrix multiplication, 116
+double quote (")
+multiline strings, 35
+string literals declared, 35
+downsampling, 387, 388-391
+target period as subperiod, 393
+dropna() filter for missing data, 205-207
+drop_duplicates() for DataFrame rows, 210
+DST (daylight saving time), 374, 378
+dtype property, 86, 87, 88-91, 473
+duck typing of objects, 31
+duplicated() for DataFrame rows, 210
+duplicates removed from data, 209
+E
+Effective Python (Slatkin), 18
+elapsed time, 357
+else, if, elif, 42
+NumPy array vectorized version, 110
+email lists for data-related Python, 13
+encoding of files
+encoding property, 79
+open(), 76
+converting between encodings, 81
+encoding of strings, 38
+end-of-line (EOL) markers, 77
+enumerate(), 62
+equal sign (=)
+set update methods, 60
+test for equality, 32
+variable assignment, 28
+unpacking tuples, 49
+errors and exception handling, 74-76
+AssertionError and debugger, 519-523
+broadcasting, 487
+Index 
+| 
+541
+debugger in IPython, 519
+integer indexing, 149
+IPython exceptions, 76
+periods and resampling, 394
+raise_for_status() for HTTP errors, 197
+SettingWithCopyWarning, 151
+substring find() versus index(), 228
+time zone-aware data with naive, 379
+try/except blocks, 74
+ValueError in NumPy casting, 91
+ewm() for exponentially weighted moving
+functions, 400
+example datasets
+about, 425
+Bitly links with .gov or .mil, 425-435
+Federal Election Commission (2012),
+463-472
+MovieLens, 435-442
+US baby names, 443-456
+ExcelFile class (pandas), 194
+exceptions (see errors and exception handling)
+exclamation point (!) for shell commands, 516
+executing code from clipboard, 513
+execution time measured, 523-525
+exit() to exit Python shell, 18
+GNU/Linux, 11
+macOS, 11
+Windows, 10
+exp() (NumPy ufunc), 105
+expanding() in moving window functions, 398
+experimental time series, 357
+exporting data (see writing data to a file)
+extension data types, 224, 233
+astype(), 226, 238
+extract() regex from string, 234
+F
+f-strings, 38
+facet grids, 314-316
+False, 39
+fancy indexing by NumPy ndarrays, 100-102
+take() and put(), 483
+feature engineering in modeling, 405
+Federal Election Commission dataset, 463-472
+bucketing donation amounts, 469-471
+donations by occupation and employer,
+466-468
+donations by state, 471
+figure() (matplotlib), 283
+add_subplot() (matplotlib), 283
+AxesSubplot objects returned, 285
+savefig(), 296
+files in Python, 76-81
+binary data formats
+about non-pickle formats, 194
+HDF5 format, 195-197, 504
+memory-mapped files, 503
+Microsoft Excel files, 194
+ndarrays saved, 116
+Parquet (Apache), 194, 197
+pickle format, 193
+pickle format caution, 193
+plots saved to files, 296
+database interactions, 199-201
+methods most commonly used, 79
+modes, 78
+binary mode, 80
+open() default read only, 77
+open() write-only modes, 77
+text mode default, 80
+open(), 76
+close() when finished, 77
+converting between encodings, 81
+default read only mode, 77
+read/write modes, 78
+with statement for clean-up, 77
+write-only modes, 77
+writing delimited files, 187
+plots saved to files, 296
+reading text data, 175-181
+CSV files, 177-181
+CSV files of other formats, 186
+JSON data, 187
+missing data, 133
+other delimited formats, 185
+reading in pieces, 182
+type inference, 177
+XML and HTML, 189
+writing text data
+CSV files, 184
+JSON data, 189
+missing data, 184
+other delimited format, 187
+subset of columns, 185
+fillna() to fill in missing data, 205, 207-209
+arguments, 209
+filling values with mean, 340-342
+resampling, 392
+542 
+| 
+Index
+filtering out missing data, 205-207
+find() in substring, 228
+fiscal years, 381
+fiscal year end for quarterly periods, 382
+fixed frequency time series, 357
+fixed period time series, 357
+float scalar type, 34
+scientific notation, 35
+type casting, 40
+Float32Dtype extension data type, 226
+Float64Dtype extension data type, 226
+floor (//), 32, 35
+Fluent Python (Ramalho), 18
+flush() I/O buffer, 79
+for loops, 43
+NumPy array vectorization instead, 85, 91,
+108, 110
+performance tip, 505
+formatting strings, 37
+datetime type to string, 41
+documentation online, 38
+f-strings, 38
+FORTRAN language
+about legacy libraries, 3
+NumPy arrays, 4, 83, 89
+performance tip, 505
+frequencies in periods, 379
+quarterly period frequencies, 382
+resampling and frequency conversion, 387
+downsampling, 388-391
+frequencies in time series chart, 368
+frequency table via crosstab(), 304
+fromfile() (NumPy), 495
+frompyfunc() (NumPy), 493
+from_codes() for Categorical, 239
+functions, 67
+about, 65
+anonymous (lambda), 70
+arguments, 28, 66
+dynamic references, strong types, 29
+functions as, 70
+keyword arguments, 66
+None as default value, 40
+positional arguments, 66
+calling, 28
+declaring with def, 66
+errors and exception handling, 74-76
+generators, 71
+generator expressions, 72
+grouping via, 328
+aggregating data, 331
+methods of Python objects, 28, 30
+__name__ attribute, 333
+namespaces, 67
+profiling line by line, 527-529
+Python into NumPy via frompyfunc(), 493
+Python objects, 27, 69
+return keyword optional, 66
+returning multiple values, 68
+yield instead of return, 71
+Fundamentals of Data Visualization (Wilke),
+317
+G
+generators, 71
+generator expressions, 72
+itertools module generator collection, 73
+reversed() as, 63
+Géron, Aurélien, 423
+get() for HTTP request, 197
+get() for string element, 234
+getattr(), 31
+getdefaultencoding() (sys module), 78
+get_dummies(), 221, 407
+Gitee for datasets, 425
+GitHub
+alternate site Gitee, 425
+book materials
+datasets, 15
+datasets for last chapter, 425
+Jupyter code examples, 7
+get() HTTP request, 197
+global interpreter lock (GIL), 4
+global variables
+caution against using, 68
+function scope, 67
+GNU/Linux Miniconda installation, 10
+exit() or Ctrl-D to exit Python shell, 11, 18
+greater than (>) operator, 32
+set elements, 60
+group operations
+about, 319
+cross-tabulations, 354
+examples
+group-wise linear regression, 347
+missing data replacement, 340-342
+random sampling and permutations, 343
+Index 
+| 
+543
+weighted average and correlation,
+344-346
+group keys suppressed, 338
+how to think about, 320-329
+dictionaries and Series for grouping, 327
+functions for grouping, 328
+group aggregation example, 320
+index levels for grouping, 328
+iterating over groups, 324
+missing values excluded, 324
+selecting columns, 326
+pivot tables, 352
+about, 351
+cross-tabulations, 354
+hierarchical indexing, 249
+split-apply-combine, 320, 335
+transform(), 347
+unwrapped group operations, 350
+groupby() (itertools), 73, 322
+aggregations chart, 329
+apply(), 335
+cut() and qcut() with, 338-340
+date offsets with, 373
+group keys suppressed, 338
+GroupBy object, 322
+indexing with column name(s), 326
+grouped by key, 348
+iterating over groups, 324
+level specified, 251
+nuisance columns excluded, 323
+size(), 323
+split-apply-combine, 320, 335
+transform(), 347
+Grus, Joel, 423
+Guido, Sarah, 423
+H
+h5py package for HDF5 files, 195, 197, 504
+Hands-On Machine Learning with Scikit-
+Learn, Keras, and TensorFlow (Géron), 423
+hasattr(), 31
+hash maps, 55
+(see also dictionaries)
+hash mark (#) for comment, 27
+hashability
+dictionaries, 59
+hash() for, 59
+set elements, 61
+HDF5 binary file format, 195-197, 504
+HDFStore(), 195
+fixed versus table storage schemas, 196
+header row in text data files, 177, 186
+hierarchical indexing, 247-253
+about, 247
+about DataFrames, 129
+indexing with columns, 252
+MultiIndex, 247
+created by itself then reused, 250
+names for levels, 249
+number of levels attribute, 250
+partial indexing made possible, 248
+reading text data from a file, 178
+reordering and sorting levels, 250
+reshaping data, 249, 270-273
+summary statistics by level, 251
+hist() (matplotlib), 285
+histograms and density plots, 309-310
+histplot() (seaborn), 310
+Hour(), 370
+hstack() (NumPy), 479
+HTML file format, 189
+reading, 189
+Hugunin, Jim, 84
+Hunter, John D., 6, 281
+I
+IDEs (integrated development environments),
+12
+available IDEs, 13
+if, elif, else, 42
+NumPy array vectorized version, 110
+iloc operator
+DataFrame indexing, 147
+Series indexing, 144
+square brackets ([ ]), 143, 145
+immutable and mutable objects, 34
+datetime types immutable, 41
+Index objects immutable, 136
+lists mutable, 51
+set elements generally immutable, 61
+strings immutable, 36
+tuples themselves immutable, 48
+implicit casting and conversions, 30
+importing data (see reading data from a file)
+importing modules, 32
+import csv, 185
+import datetime, 358
+import matplotlib.pyplot as plt, 282
+544 
+| 
+Index
+import numpy as np, 16, 86, 124, 320
+import os, 197
+import pandas as pd, 16, 124, 320
+import Series, DataFrame, 124
+import patsy, 408
+import pytz, 375
+import requests, 197
+import seaborn as sns, 16, 306
+import statsmodels.api as sm, 16, 347, 415
+import statsmodels.formula.api as smf, 415
+indentation in Python, 26
+index levels for grouping, 328
+Index objects (pandas), 136
+map() to transform data, 214
+set methods available, 137
+index() of substring, 228
+inner join of merged data, 255
+installation and setup of Python
+about, 9
+about Miniconda, 9, 10
+GNU/Linux, 10
+macOS, 11
+necessary packages, 11
+Windows, 9
+int scalar type, 34
+integer division, 35
+NumPy signed and unsigned, 90
+range(), 44
+type casting, 40
+Int16Dtype extension data type, 226
+Int32Dtype extension data type, 226
+Int64Dtype extension data type, 226
+Int8Dtype extension data type, 226
+integrated development environments (IDEs),
+12
+available IDEs, 13
+interactive debugger in IPython, 519-523
+interpreted Python language
+about the interpreter, 18
+global interpreter lock, 4
+invoking via “python”, 18
+GNU/Linux, 10
+IPython, 19
+macOS, 11
+Windows, 10
+IPython project, 6
+(see also IPython)
+prompt, 18
+intersection(), 60
+DataFrame method, 137
+intersection_update(), 60
+intervals
+open versus closed, 216
+half-open, 388
+time intervals, 357
+Introduction to Machine Learning with Python
+(Müller and Guido), 423
+introspection in IPython, 25
+IPython
+about, 6
+advanced features, 532
+basics, 19
+tab completion, 23, 30
+command history, 514-516
+input and output variables, 515
+searching and reusing, 514
+configuration, 532
+DataFrame access, 131
+development environment, 12
+(see also software development tools)
+documentation link, 24
+exceptions, 76
+executing code from clipboard, 513
+introspection, 25
+invoking, 19
+keyboard shortcuts, 509
+magic commands, 510-511
+%alias, 517
+%bookmark, 518
+Ctrl-C to interrupt running code, 513
+%debug, 519-523
+executing code from clipboard, 513
+%lprun, 527-529
+operating system commands, 516
+%prun, 525-527
+%run, 19, 512
+operating system commands, 516
+directory bookmark system, 518
+shell commands and aliases, 517
+profiles, 532
+prompt, 19
+software development tools
+about, 519
+debugger, 519-523
+measuring execution time, 523-525
+profiling code, 525-527
+profiling function line by line, 527-529
+tips for productive development, 529
+Index 
+| 
+545
+irregular time series, 357
+is operator, 32
+test for None, 34
+isdisjoint(), 60
+isinstance(), 30
+isna() to detect NaN, 127, 204, 205
+ISO 8601 date format parsed, 360
+issubset(), 60
+issuperset(), 60
+is_unique() property of indexes, 164
+iterators
+dictionary keys and values, 56
+duck typing to verify, 31
+for loops for unpacking, 44
+generators, 71
+groupby() object, 324
+list(), 51
+range(), 45
+read_csv(), 181
+TextFileReader object, 183
+tuple(), 48
+itertools module generator collection, 73
+chain(), 73
+combinations(), 73
+documentation online, 73
+groupby(), 73
+(see also groupby())
+permutations(), 73
+product(), 73
+J
+join() for DataFrames, 262
+example of use, 221
+join() for string concatenation, 228
+joins of merged data, 254-258
+inner join, 255
+join() for DataFrames, 262
+example of use, 221
+left and right joins, 256
+many-to-many, 256
+many-to-one, 254
+merge key(s) in index, 259-263
+outer join, 255
+overlapping column names, 258
+Jones, Brian K., 18
+JSON data
+about, 187
+valid Python code almost, 187
+get() for HTTP, 198
+json library functions, 187
+Python objects to and from JSON, 187
+reading into Series or DataFrames, 188
+writing from Series or DataFrames, 189
+Julia programming language, 3
+Jupyter notebooks
+about, 6
+about GitHub notebooks, 7
+about IPython project, 6
+basics, 20
+configuration, 533
+development environment, 12
+executing code from clipboard, 513
+importing a script into a code cell, 513
+pandas DataFrame object display, 129
+plotting and visualization, 281
+alternatives to Jupyter notebooks, 282
+plotting commands into single cell, 284
+just-in-time (JIT) compiler technology, 3
+K
+Kaggle competition dataset, 420
+kernel density estimate (KDE) plots, 309
+keyboard shortcuts for IPython, 509
+KeyboardInterrupt, 513
+keyword arguments, 66
+Klein, Adam, 6
+Komodo IDE, 13
+L
+lambda functions, 70
+named “<lambda>”, 333
+left joins of merged data, 256
+legend() (matplotlib), 289, 293
+less than (<) operator, 32
+set elements, 60
+lexsort() (NumPy), 497
+libraries
+essential Python libraries
+matplotlib, 6
+NumPy, 4
+pandas, 5
+scikit-learn, 8
+SciPy, 7
+statsmodels, 8
+import conventions, 16
+legacy libraries, 3
+Numba for JIT compiler technology, 3
+line plots
+546 
+| 
+Index
+matplotlib, 282
+(see also matplotlib)
+pandas, 298-301
+linear algebra with NumPy arrays, 116
+linear models
+group-wise linear regression, 347
+intercept, 409, 412, 416
+ordinary least squares linear regression, 416
+Patsy, 408-415
+about Patsy, 408
+DesignMatrix instances, 408
+model metadata in design_info, 410
+objects into NumPy, 410
+Patsy’s formulas, 408, 410
+statsmodels estimations, 415-419
+Linux Miniconda installation, 10
+exit() or Ctrl-D to exit Python shell, 11, 18
+list(), 51
+lists, 51-55
+adding or removing elements, 51
+append() versus insert(), 52
+concatenating and combining, 53
+DataFrame columns, 133
+dictionary keys from, 59
+file open(), 77
+list comprehensions, 63
+nested, 64
+mutable, 51
+performance of ndarray versus, 85
+range(), 44
+slicing, 54
+sort() in place, 53
+sorted() to new list, 62
+strings as, 36
+LLVM Project, 501
+load() ndarray (NumPy), 116
+loc operator
+DataFrame indexing, 147
+modeling, 407
+Series indexing, 143
+square brackets ([ ]), 143, 145
+local namespace, 67
+locale-specific datetime formatting, 361
+loops
+for loops, 43
+NumPy array vectorization instead, 85, 91,
+108, 110
+performance tip, 505
+while loops, 44
+%lprun command, 527-529
+lxml, 189
+objectify parsing XML, 190
+M
+machine learning toolkit (see scikit-learn)
+macOS Miniconda installation, 11
+exit() or Ctrl-D to exit Python shell, 11, 18
+many-to-many joins of merged data, 256
+many-to-one joins of merged data, 254
+map() to transform data, 212
+axis indexes, 214
+math operators in Python, 32
+matplotlib
+about, 6, 281, 317
+API primer, 282-297
+about matplotlib, 282
+annotations and drawing on subplot,
+294-296
+colors, markers, line styles, 288-290
+figures and subplots, 283-288
+saving plots to file, 296
+ticks, labels, legends, 290-293
+configuration, 297
+documentation online, 286
+invoking, 282
+patch objects, 295
+plots saved to files, 296
+two-dimensional NumPy array, 108
+matrix multiplication via dot() (NumPy), 116
+maximum() (NumPy ufunc), 105
+mean(), 322
+grouping by key, 348
+missing data replaced with mean, 340-342
+pivot table default aggregation, 352
+median value to fill in missing data, 421
+melt() multiple columns into one, 277-278
+memmap() (NumPy), 503
+memory usage
+contiguous memory importance, 505
+generators, 72
+NumPy ndarrays, 84
+row versus column major order, 478
+striding information, 473
+memory-mapped files (NumPy), 503
+merge() datasets, 254-258
+merge key(s) in index, 259-263
+mergesort parameter for stable sorts, 498
+metadata
+Index 
+| 
+547
+dtype as, 87, 88
+model metadata in design_info, 410
+pandas preserving, 5
+Microsoft Excel files read, 194
+Miniconda package manager
+about, 9, 10
+conda to invoke commands (see conda)
+conda-forge, 9
+GNU/Linux installation, 10
+necessary packages installed, 11
+Windows installation, 9
+minus (-) operator, 32
+sets, 60
+timedelta type, 41
+Mirjalili, Vahid, 423
+missing data, 203
+combine_first(), 269
+datetime parsing, 361
+filling in, 207-209
+pivot tables, 353
+with mean value, 340-342
+with median value, 421
+filtering out, 205-207
+groupby() group key, 324
+introduced during shifting, 372
+NA and NULL sentinels (pandas), 179
+NA for not available, 179, 204
+NaN (pandas), 127, 203
+fillna() to fill in missing data, 205,
+207-209
+isna() and notna() to detect, 127, 204,
+205
+None, 34, 40, 204
+dictionary key not present, 58
+function without return, 66
+is operator testing for, 34
+reading text data from a file, 179
+scikit-learn not allowing, 420
+sentinel (placeholder) values, 179, 184, 203
+statsmodels not allowing, 420
+string data, 232-234
+writing text data to a file, 184
+modeling
+about, 405
+data
+feature engineering, 405
+nonnumeric column, 407
+NumPy arrays for transfer, 406
+pandas for loading and cleaning, 405
+intercept, 409, 412, 416
+Patsy for model descriptions, 408-415
+about Patsy, 8, 408
+categorical data, 412-415
+data transformations, 410
+DesignMatrix instances, 408
+model metadata in design_info, 410
+objects into NumPy, 410
+Patsy’s formulas, 408, 410
+stateful transformations, 411
+modf() (NumPy ufunc), 106
+modules
+about, 32
+csv module, 185
+datetime module, 41-42
+importing, 32
+import matplotlib.pyplot as plt, 282
+import numpy as np, 16, 86, 124, 320
+import pandas as pd, 16, 124, 320
+import seaborn as sns, 16
+import Series, DataFrame, 124
+import statsmodels as sm, 16
+itertools module, 73
+os module, 197
+pickle module, 193
+caution about, 193
+random modules, 103
+re for regular expressions, 229
+requests module, 197
+Monte Carlo simulation example, 343
+MovieLens example dataset, 435-442
+measuring rating disagreement, 439-442
+moving window functions, 396-403
+binary, 401
+decay factor, 399
+expanding window mean, 398
+exponentially weighted functions, 399
+rolling operator, 396
+span, 399
+user-defined, 402
+Müller, Andreas, 423
+MultiIndex, 247
+created by itself then reused, 250
+multithreading and Python, 4
+mutable and immutable objects, 34
+datetime types immutable, 41
+Index objects immutable, 136
+lists mutable, 51
+set elements generally immutable, 61
+548 
+| 
+Index
+strings immutable, 36
+tuples themselves immutable, 48
+N
+NA for data not available, 179, 204
+(see also null values)
+namespaces
+functions, 67
+importing modules (see importing modules)
+importing Series, DataFrame into local, 124
+IPython namespace search, 26
+scripts run in empty namespace, 512
+NaN (Not a Number; pandas), 127, 203
+dropna() filter for missing data, 205-207
+fillna() to fill in missing data, 205, 207-209
+isna() and notna() to detect, 127, 204, 205
+missing data in file read, 179
+NaT (Not a Time), 361
+ndarrays (NumPy)
+@ infix operator, 103
+about, 85
+advanced concepts
+broadcasting, 92, 156, 484-489
+C order versus FORTRAN order, 478
+C versus FORTRAN order, 476
+concatenating arrays, 263-268, 479-481
+data type hierarchy, 474
+fancy indexing equivalents, 483
+object internals, 473
+r_ and c_ objects, 480
+repeating elements, 481
+reshaping arrays, 476-478
+row major versus column major order,
+478
+row versus column major order, 476
+sorting, 114, 495-501
+splitting arrays, 479
+striding information, 473
+structured arrays, 493-495
+tiling arrays, 482
+ufunc methods, 106, 490-492
+ufuncs compiled via Numba, 502
+ufuncs faster with Numba, 501
+ufuncs written in Python, 493
+arithmetic with, 91
+array-oriented programming, 108-115
+conditional logic as array operations, 110
+random walks, 118-121
+random walks, many at once, 120
+unique and other set logic, 115
+vectorization, 108, 110
+basic indexing and slicing, 92-97
+Boolean array methods, 113
+Boolean indexing, 97-100
+broadcasting, 484-489
+about, 92, 156
+over other axes, 487
+performance tip, 505
+setting array values via, 489
+concatenating, 263-268, 479-481
+r_ and c_ objects, 480
+creating, 86-88
+data types, 87, 88-91, 473
+hierarchy of, 474
+type casting, 90
+ValueError, 91
+dtype property, 86, 87, 88-91
+fancy indexing, 100-102
+take() and put(), 483
+linear algebra, 116
+model data transfer via, 406
+Patsy DesignMatrix instances, 409
+performance of Python list versus, 85
+shape property, 86
+sorting, 114, 495-501
+alternative sort algorithms, 498
+descending order problem, 497
+indirect sorts, 497
+partially sorting, 499
+searching sorted arrays, 500
+statistical methods, 111
+structured arrays
+about, 493
+memory maps working with, 504
+nested data types, 494
+why use, 495
+swapping axes, 103
+transposing arrays, 102
+ufuncs, 105
+compiled via Numba, 502
+faster with Numba, 501
+methods, 106, 490-492
+pandas objects and, 158
+Python-written ufuncs, 493
+nested list comprehensions, 64
+newline character (\n) counted, 36
+None, 40, 204
+about, 34
+Index 
+| 
+549
+dictionary key not present, 58
+function without return, 66
+is operator testing for, 34
+nonlocal variables, 67
+not equal to (!=), 32
+notna() to detect NaN, 127, 204
+filtering out missing data, 205
+np (see NumPy)
+null values
+combining data with overlap, 268
+missing data, 179, 203
+(see also missing data)
+NaN (pandas), 127, 203
+dropna() filter for missing data, 205-207
+fillna() to fill in, 205, 207-209
+isna() and notna() to detect, 127, 204,
+205
+missing data in file read, 179
+NaT (Not a Time; pandas), 361
+None, 34, 40, 204
+dictionary key not present, 58
+function without return, 66
+is operator testing for, 34
+nullable data types, 226, 254
+pivot table fill values, 353
+string data preparation, 233
+Numba library
+about, 501
+custom compiled NumPy ufuncs, 502
+just-in-time (JIT) compiler technology, 3
+numeric types, 35
+NaN as floating-point value, 203
+nullable data types, 226, 254
+NumPy ndarrays
+data type hierarchy, 474
+type casting, 90
+NumPy
+about, 4, 83-85
+shortcomings, 224
+array-oriented programming, 108-115
+conditional logic as array operations, 110
+random walks, 118-121
+random walks, many at once, 120
+unique and other set logic, 115
+vectorization, 108, 110
+data types, 88-91
+hierarchy of, 474
+string_ type caution, 91
+trailing underscores in names, 475
+ValueError, 91
+DataFrames to_numpy(), 135
+email list, 13
+import numpy as np, 16, 86, 124, 320
+ndarrays, 85
+(see also ndarrays)
+Patsy objects directly into, 410
+permutation of data, 219
+pseudorandom number generation, 103
+methods available, 104
+Python functions via frompyfunc(), 493
+O
+object introspection in IPython, 25
+object model of Python, 27
+(see also Python objects)
+OHLC (open-high-low-close) resampling, 391
+Oliphant, Travis, 84
+Olson database of time zone information, 374
+online resources (see resources online)
+open() a file, 76
+close() when finished, 77
+converting between encodings, 81
+default read only mode, 77
+read/write modes, 78
+with statement for clean-up, 77
+write-only modes, 77
+writing delimited files, 187
+open-high-low-close (OHLC) resampling, 391
+operating system via IPython, 516
+directory bookmark system, 518
+os module, 197
+shell commands and aliases, 517
+ordinary least squares linear regression, 416
+os module to remove HDF5 file, 197
+outer join of merged data, 255
+outer() (NumPy ufunc), 491
+P
+package manager Miniconda, 9
+conda-forge, 9
+pairplot() (seaborn), 312
+pandas
+about, 5, 84, 123
+book coverage, 123
+file input and output, 116
+non-numeric data handling, 91
+time series, 5
+DataFrames, 129-136
+550 
+| 
+Index
+(see also DataFrames)
+about, 5, 6
+arithmetic, 152
+arithmetic with fill values, 154
+arithmetic with Series, 156
+columns retrieved as Series, 131
+constructing, 129
+hierarchical indexing, 129
+importing into local namespace, 124
+Index objects, 136
+indexes for row and column, 129
+indexing options chart, 148
+integer indexing pitfalls, 149
+Jupyter notebook display of, 129
+objects that have different indexes, 152
+possible data inputs chart, 135
+reindexing, 138
+to_numpy(), 135
+documentation online, 358, 504
+import pandas as pd, 16, 124, 320
+import Series, DataFrame, 124
+Index objects, 136
+set methods available, 137
+missing data representations, 203
+(see also missing data)
+modeling with, 405
+(see also modeling)
+NaN for missing or NA values, 127, 203
+dropna() filter for missing data, 205-207
+fillna() to fill in missing data, 205,
+207-209
+isna() and notna() to detect, 127, 204,
+205
+missing data in file read, 179
+Series, 124-128
+(see also Series)
+about, 5
+arithmetic, 152
+arithmetic methods chart, 155
+arithmetic with DataFrames, 156
+arithmetic with fill values, 154
+array attribute, 124
+DataFrame column retrieved as, 131
+importing into local namespace, 124
+index, 124
+index attribute, 124
+Index objects, 136
+indexing, 142
+integer indexing pitfalls, 149
+name attribute, 128
+NumPy ufuncs and, 158
+objects that have different indexes, 152
+PandasArray, 125
+reindexing, 138
+statistical methods
+correlation and covariance, 168-170
+summary statistics, 165-168
+summary statistics by level, 251
+unique and other set logic, 170-173
+PandasArray, 125
+parentheses ( )
+calling functions and object methods, 28
+intervals open (exclusive), 216
+method called on results, 218
+tuples, 47-50
+tuples of exception types, 75
+Parquet (Apache)
+read_parquet(), 194
+remote servers for processing data, 197
+parsing a text file, 175-181
+HTML, 189
+JSON, 188
+XML with lxml.objectify, 190
+parsing date format , 360
+pass statement, 44
+passenger survival scikit-learn example,
+420-423
+patch objects in matplotlib, 295
+PATH and invoking Miniconda, 9
+Patsy, 408-415
+about, 8, 408
+Intercept, 409, 412, 416
+DesignMatrix instances, 408
+model metadata in design_info, 410
+objects into NumPy, 410
+Patsy’s formulas, 408, 410
+categorical data, 412-415
+data transformations, 410
+stateful transformations, 411
+pd (see pandas)
+pdb (see debugger in IPython)
+percent (%)
+datetime formatting, 359
+IPython magic commands, 510-511
+%alias, 517
+%bookmark, 518
+Ctrl-C to interrupt running code, 513
+%debug, 519-523
+Index 
+| 
+551
+executing code from clipboard, 513
+%lprun, 527-529
+operating system commands, 516
+%prun, 525-527
+%run, 19, 512
+%run -p, 525-527
+%time and %timeit, 523-525
+Pérez, Fernando, 6
+performance
+aggregation functions, 331, 350
+categorical data computations, 241
+NumPy ndarray versus Python list, 85
+Python ufuncs via NumPy, 493
+faster with Numba, 501
+sort_index() data selection, 251
+tips for, 505
+contiguous memory importance, 505
+value_counts() on categoricals, 242
+Period object, 379
+converted to another frequency, 380
+converting timestamps to and from, 384
+quarterly period frequencies, 382
+PeriodIndex object, 380
+converted to another frequency, 380, 381
+creating from arrays, 385
+PeriodIndex(), 274
+periods
+about, 379
+period frequency conversion, 380
+resampling with, 392
+period_range(), 380
+Perktold, Josef, 8
+permutation of data, 219
+example, 343
+itertools function, 73
+NumPy random generator method, 104
+permutations() (itertools), 73
+pickle module, 193
+read_pickle(), 168, 193
+to_pickle(), 193
+caution about long-term storage, 193
+pip
+install, 12
+conda install recommended, 12
+upgrade flag, 12
+pipe (|) for OR, 32
+NumPy ndarrays, 99
+pivot tables, 352-354
+about, 351
+cross-tabulations, 354
+default aggregation mean(), 352
+aggfunc keyword for other, 353
+fill value for NA entries, 353
+hierarchical indexing, 249
+margins, 352
+pivot tables, 352
+pivot(), 275
+pivot_table(), 351
+options chart, 354
+plot() (matplotlib), 284
+colors and line styles, 288-290
+plot() (pandas objects)
+bar plots, 301-308
+value_counts() for, 304
+density plots, 309-310
+histograms, 309-310
+line plots, 298-301
+Plotly for visualization, 317
+plotting
+about, 281
+book on data visualization, 317
+matplotlib
+about, 6, 281, 317
+API primer, 282
+configuration, 297
+documentation online, 286
+patch objects, 295
+plots saved to files, 296
+two-dimensional NumPy array, 108
+other Python tools, 317
+seaborn and pandas, 298-316
+about seaborn, 281, 298, 306
+bar plots via pandas, 301-306
+bar plots with seaborn, 306
+box plots, 315
+density plots, 309-310
+documentation online, 316
+facet grids, 314-316
+histograms, 309-310
+import seaborn as sns, 16, 306
+line plots, 298-301
+scatter or point plots, 311-313
+plus (+) operator, 32
+adding strings, 37
+lists, 53
+Patsy’s formulas, 408
+I() wrapper for addition, 412
+timedelta type, 42
+552 
+| 
+Index
+tuple concatenation, 49
+point or scatter plots, 311-313
+Polygon() (matplotlib), 295
+pop() column from DataFrame, 274
+pound sign (#) for comment, 27
+preparation of data (see data preparation)
+product() (itertools), 73
+profiles in IPython, 532
+profiling code, 525-527
+function line by line, 527-529
+prompt for IPython, 19
+prompt for Python interpreter, 18
+%prun, 525-527
+pseudorandom number generation, 103
+methods available, 104
+put() (NumPy), 483
+pyarrow package for read_parquet(), 194
+PyCharm IDE, 13
+PyDev IDE, 13
+PyTables package for HDF5 files, 195, 197, 504
+Python
+about data analysis, 1
+Python drawbacks, 3
+Python for, 2
+about Python
+both prototyping and production, 3
+legacy libraries and, 3
+about version used by book, 9
+community, 13
+conferences, 13
+data structures and sequences
+dictionaries, 55-59
+lists, 51-55
+sequence functions built in, 62
+sets, 59-61
+tuples, 47-50
+errors and exception handling, 74-76
+(see also errors and exception handling)
+everything is an object, 27
+exit() to exit, 18
+GNU/Linux, 11
+macOS, 11
+Windows, 10
+files, 76-81
+(see also files in Python)
+installation and setup
+about, 9
+about Miniconda, 9, 10
+GNU/Linux, 10
+macOS, 11
+necessary packages, 11
+Windows, 9
+interpreted language
+about the interpreter, 18
+global interpreter lock, 4
+IPython project, 6
+(see also IPython)
+speed trade-off, 3
+invoking, 18
+GNU/Linux, 10
+IPython, 19
+macOS, 11
+Windows, 10
+invoking matplotlib, 282
+(see also matplotlib)
+JSON objects to and from, 187
+just-in-time (JIT) compiler technology, 3
+libraries that are key
+matplotlib, 6
+NumPy, 4
+pandas, 5
+scikit-learn, 8
+SciPy, 7
+statsmodels, 8
+module import conventions, 16
+(see also modules)
+objects, 27
+duck typing, 31
+dynamic references, strong types, 29
+is operator, 32
+methods, 28, 30
+module imports, 32
+mutable and immutable, 34
+None tested for, 34
+object introspection in IPython, 25
+variables, 28
+tutorial
+about additional resources, 18
+about experimentation, 17
+binary operators, 32
+control flow, 42-45
+exiting Python shell, 18
+importing modules, 32
+invoking Python, 18
+IPython basics, 19
+IPython introspection, 25
+IPython tab completion, 23, 30
+Jupyter notebook basics, 20
+Index 
+| 
+553
+scalars, 34-42
+semantics of Python, 26-34
+ufuncs written in, 493
+custom compiled NumPy ufuncs, 502
+faster with Numba, 501
+Python Cookbook (Beazley and Jones), 18
+Python Data Science Handbook (VanderPlas),
+423
+Python Machine Learning (Raschka and Mirja‐
+lili), 423
+Python objects, 27
+attributes, 30
+converting to strings, 36
+duck typing, 31
+functions, 69
+is operator, 32
+test for None, 34
+key-value pairs of dictionaries, 55
+methods, 28, 30
+mutable and immutable, 34
+datetime types immutable, 41
+Index objects immutable, 136
+lists mutable, 51
+set elements generally immutable, 61
+strings immutable, 36
+tuples themselves immutable, 48
+object introspection in IPython, 25
+scalars, 34-42
+to_numpy() with heterogeneous data, 407
+variables, 28
+dynamic references, strong types, 29
+module imports, 32
+Python Tools for Visual Studio (Windows), 13
+pytz library for time zones, 374
+Q
+qcut() for data binning per quantiles, 216
+groupby() with, 338-340
+quarterly period frequencies, 382
+question mark (?)
+namespace search in IPython, 26
+object introspection in IPython, 25
+quote marks
+multiline strings, 36
+string literals declared, 35
+R
+raise_for_status() for HTTP errors, 197
+Ramalho, Luciano, 18
+random modules (NumPy and Python), 103
+book use of np.random, 473
+NumPy permutation(), 219
+random sampling, 220
+example, 343
+random walks via NumPy arrays, 118-121
+many at once, 120
+range(), 44
+Raschka, Sebastian, 423
+ravel() (NumPy), 478
+rc() for matplotlib configuration, 297
+re module for regular expressions, 229
+read() a file, 78
+readable() file, 79
+reading data from a file
+about, 175
+binary data
+about non-pickle formats, 194
+HDF5 format, 195-197, 504
+memory-mapped files, 503
+Microsoft Excel files, 194
+pickle format, 193
+pickle format caution, 193
+CSV Dialect, 186
+database interactions, 199-201
+fromfile() into ndarray, 495
+text data, 175-181
+CSV files, 177-181
+CSV files of other formats, 186
+delimiters separating fields, 179
+header row, 177, 186
+JSON, 187
+missing data, 133, 179
+other delimited formats, 185
+parsing, 175
+reading in pieces, 182
+type inference, 177
+XML and HTML, 189
+readlines() of a file, 79
+read_* data loading functions, 175
+read_csv(), 177-181
+about Python files, 73
+arguments commonly used, 181
+other delimited formats, 185
+reading in pieces, 182
+read_excel(), 194
+read_hdf(), 197
+read_html(), 189
+read_json(), 188
+554 
+| 
+Index
+read_parquet(), 194
+read_pickle(), 168, 193
+read_sql(), 201
+read_xml(), 192
+Rectangle() (matplotlib), 295
+reduce() (NumPy ufunc), 490
+reduceat() (NumPy ufunc), 492
+reduction methods for pandas objects, 165-168
+regplot() (seaborn), 312
+regular expressions (regex), 229-232
+data preparation, 232-234
+text file whitespace delimiter, 179
+reindex() (pandas), 138
+arguments, 140
+loc operator for, 140
+resampling, 392
+remove() for sets, 60
+rename() to transform data, 214
+repeat() (NumPy), 481
+replace() to transform data, 212
+string data, 228
+requests package for web API support, 197
+resample(), 387
+arguments chart, 388
+resampling with periods, 392
+resampling and frequency conversion, 387
+downsampling, 388-391
+grouped time resampling, 394
+open-high-low-close resampling, 391
+upsampling, 391, 391
+open-high-low-close resampling, 391
+reshape() (NumPy), 101, 476-478
+row major versus column major order, 478
+resources
+book on data visualization, 317
+books on modeling and data science, 423
+resources online
+book on data visualization, 317
+IPython documentation, 24
+matplotlib documentation, 286
+pandas documentation, 358, 504
+Python documentation
+formatting strings, 38
+itertools functions, 73
+Python tutorial, 18
+seaborn documentation, 316
+visualization tools for Python, 317
+reversed() sequence, 63
+generator, 63
+right joins of merged data, 256
+rolling() in moving window functions, 396
+%run command, 19, 512
+%run -p, 525-527
+S
+sample() for random sampling, 220
+save() ndarray (NumPy), 116
+savefig() (matplotlib), 296
+scalars, 34-42
+scatter or point plots, 311-313
+scatter() (matplotlib), 285
+scikit-learn, 420-423
+about, 8, 420
+conda install scikit-learn, 420
+cross-validation, 422
+email list, 13
+missing data not allowed, 420
+filling in missing data, 421
+SciPy
+about, 7
+conda install scipy, 310
+density plots requiring, 310
+email list, 13
+scripting languages, 2
+scripts via IPython %run command, 19, 512
+Ctrl-C to interrupt running code, 513
+execution time measured, 523
+Seabold, Skipper, 8
+seaborn and pandas, 298-316
+about seaborn, 281, 298, 306
+bar plots via pandas, 301-306
+bar plots with seaborn, 306
+box plots, 315
+density plots, 309-310
+documentation online, 316
+facet grids, 314-316
+histograms, 309
+import seaborn as sns, 16, 306
+line plots via pandas, 298-301
+scatter or point plots, 311-313
+searchsorted() (NumPy), 500
+seek() in a file, 78
+seekable() file, 79
+semicolon (;) for multiple statements, 27
+sentinel (placeholder) values, 184, 203
+NA and NULL sentinels (pandas), 179
+sequences
+built-in sequence functions, 62
+Index 
+| 
+555
+Categorical from, 239
+dictionaries from, 57
+lists, 51-55
+range(), 44
+strings as, 36
+tuples, 47-50
+unpacking tuples, 49
+serializing data, 193
+Series (pandas), 124-128
+about, 5
+arithmetic, 152
+with fill values, 154
+arithmetic methods chart, 155
+arithmetic with DataFrames, 156
+array attribute, 124
+PandasArray, 125
+axis indexes with duplicate labels, 164
+concatenating along an axis, 263-268
+DataFrame columns, 131
+dictionary from and to Series, 126
+dimension tables, 236
+dropping entries from an axis, 141
+extension data types, 224, 233
+get_dummies(), 222
+grouping via, 327
+HDF5 binary data format, 195
+importing into local namespace, 124
+index, 124
+indexing, 142
+loc to select index values, 143
+reindexing, 138
+index attribute, 124
+Index objects, 136
+integer indexing pitfalls, 149
+JSON data to and from, 188
+map() to transform data, 212
+missing data
+dropna() to filter out, 205
+fillna() to fill in, 209
+MultiIndex, 247
+name attribute, 128
+NumPy ufuncs and, 158
+objects that have different indexes, 152
+ranking, 162
+reading data from a file (see reading data
+from a file)
+replace() to transform data, 212
+sorting, 160
+statistical methods
+correlation and covariance, 168-170
+summary statistics, 165-168
+summary statistics by level, 251
+string data preparation, 232-234
+string methods chart, 234
+time series, 361
+(see also time series)
+unique and other set logic, 170-173
+writing data (see writing data to a file)
+set(), 59
+setattr(), 31
+sets
+intersection of two, 60
+list-like elements to tuples for storage, 61
+pandas DataFrame methods, 137
+set comprehensions, 64
+union of two, 60
+set_index() to DataFrame column, 252
+set_title() (matplotlib), 292
+set_trace(), 522
+set_xlabel() (matplotlib), 292
+set_xlim() (matplotlib), 294
+set_xticklabels() (matplotlib), 291
+set_xticks() (matplotlib), 291
+set_ylim() (matplotlib), 294
+She, Chang, 6
+shell commands and aliases, 517
+shifting data through time, 371-374
+side effects, 34
+sign() to test positive or negative, 219
+single quote (')
+multiline strings, 35, 36
+string literals declared, 35
+size() of groups, 323
+slash (/) division operator, 32
+floor (//), 32, 35
+Slatkin, Brett, 18
+slicing strings, 234
+sm (see statsmodels)
+Smith, Nathaniel, 8
+sns (see seaborn)
+software development tools
+about, 519
+debugger, 519-523
+chart of commands, 521
+IDEs, 12
+available IDEs, 13
+measuring execution time, 523-525
+profiling code, 525-527
+556 
+| 
+Index
+function line by line, 527-529
+tips for productive development, 529
+sort() in place, 53
+NumPy arrays, 114, 495
+descending order problem, 497
+sorted() to new list, 62
+NumPy arrays, 114
+sorting ndarrays, 114, 495-501
+alternative sort algorithms, 498
+descending order problem, 497
+indirect sorts, 497
+partially sorting, 499
+searching sorted arrays, 500
+sort_index() by all or subset of levels, 251
+data selection performance, 251
+split() array (NumPy), 479
+split() string, 227
+split-apply-combine group operations, 320
+Spyder IDE, 13
+SQL query results into DataFrame, 199-201
+SQLAlchemy project, 201
+SQLite3 database, 199
+sqrt() (NumPy ufunc), 105
+square brackets ([ ])
+arrays, 85
+(see also arrays)
+arrays returned in reverse order, 497
+(see also arrays)
+intervals closed (inclusive), 216
+list definitions, 51
+slicing lists, 54
+loc and iloc operators, 143, 145
+series indexing, 142
+string element index, 234
+string slicing, 234
+tuple elements, 48
+stable sorting algorithms, 498
+stack(), 249, 270-273, 275
+stacking, 263-268, 479-481
+r_ and c_ objects, 480
+vstack() and hstack(), 479
+standardize() (Patsy), 411
+statistical methods
+categorical variable into dummy matrix, 221
+frequency table via crosstab(), 304
+group weighted average and correlation,
+344-346
+group-wise linear regression, 347
+groupby() (see groupby())
+histogram of bimodal distribution, 310
+mean(), 322
+grouping by key, 348
+missing data replaced with mean,
+340-342
+pivot table default aggregation, 352
+moving window functions, 396-403
+binary, 401
+decay factor, 399
+expanding window mean, 398
+exponentially weighted functions, 399
+rolling operator, 396, 398
+span, 399
+user-defined, 402
+NumPy arrays, 111
+pandas objects
+correlation and covariance, 168-170
+summary statistics, 165-168
+summary statistics by level, 251
+permutation of data, 219
+example, 343
+itertools function, 73
+NumPy random generator method, 104
+random sampling, 220, 343
+statsmodels, 415-419
+about, 8, 415
+about Patsy, 408
+conda install statsmodels, 347, 415
+Patsy installed, 408
+email list, 13
+import statsmodels.api as sm, 16, 347, 415
+import statsmodels.formula.api as smf, 415
+linear regression models, 415-419
+missing data not allowed, 420
+time series analysis, 419
+stdout from shell command, 516
+str (strings) scalar type, 35-38
+about, 34
+immutable, 36
+NumPy string_type, 91
+sequences, 36
+backslash (\) to escape, 37
+built-in string object methods, 227
+converting objects to, 36
+data preparation, 232-234
+datetime to and from, 41, 359-361
+decoding UTF-8 to, 80
+formatting, 37
+datetime as string, 41, 359-361
+Index 
+| 
+557
+documentation online, 38
+f-strings, 38
+get_dummies(), 222
+missing data, 232-234
+multiline strings, 36
+regular expressions, 229-232
+string methods, 234
+substring methods, 228
+element retrieval, 234
+type casting, 40
+NumPy ndarray type casting, 90
+str(), 36
+datetime objects as strings, 359
+type casting, 40
+strftime(), 41, 359
+striding information of ndarrays, 473
+strip() to trim whitespace, 227
+strptime(), 41, 360
+structured data, 1
+structured ndarrays
+about, 493
+memory maps working with, 504
+nested data types, 494
+why use, 495
+subplots() (matplotlib), 286
+subplots_adjust() (matplotlib), 287
+substring methods, 228
+subtraction (see minus (-) operator)
+summary statistics with pandas objects,
+165-168
+(see also pivot tables)
+swapaxes() (NumPy), 103
+swaplevel(), 250
+symmetric_difference() for sets, 60
+symmetric_difference_update() for sets, 60
+sys module for getdefaultencoding(), 78
+T
+tab completion in IPython, 23
+object attributes and methods, 30
+take() (NumPy), 483
+Taylor, Jonathan, 8
+tell() position in a file, 78
+templating strings, 37
+documentation online, 38
+f-strings, 38
+text data read from a file, 175-181
+CSV files, 177-181
+defining format and delimiter, 186
+delimiters separating fields, 179
+JSON, 187
+missing data, 133, 179
+other delimited formats, 185
+parsing, 175
+reading in pieces, 182
+type inference, 177
+XML and HTML, 189
+text data written to a file
+CSV files, 184
+JSON data, 189
+missing data, 184
+other delimited format, 187
+subset of columns, 185
+text editors, 12
+text mode default file behavior, 80
+text() (matplotlib), 294
+TextFileReader object from read_csv(), 181, 183
+tilde (~) as NumPy negation operator, 98
+tile() (NumPy), 482
+%time(), 523-525
+time series
+about, 357, 366
+about frequencies, 370
+about pandas, 5
+aggregation and zeroing time fields, 41
+basics, 361-366
+duplicate indices, 365
+indexing, selecting, subsetting, 363
+data types, 358
+converting between, 359-361
+locale-specific formatting, 361
+date ranges, frequencies, shifting
+about, 366
+frequencies and date offsets, 370
+frequencies chart, 368
+generating date ranges, 367-369
+shifting, 371-374
+shifting dates with offsets, 373
+week of month dates, 371
+fixed frequency, 357
+interpolation when reindexing, 138
+long or stacked format, 273-277
+moving window functions, 396-403
+binary, 401
+decay factor, 399
+expanding window mean, 398
+exponentially weighted functions, 399
+rolling operator, 396, 398
+558 
+| 
+Index
+span, 399
+user-defined, 402
+periods
+about, 379
+converting timestamps to and from, 384
+PeriodIndex from arrays, 385
+quarterly period frequencies, 382
+resampling and frequency conversion, 387
+downsampling, 388-391
+grouped time resampling, 394
+open-high-low-close resampling, 391
+upsampling, 391
+statsmodels for estimating, 419
+stock price percent change, 168
+time zones (see time zones)
+time type, 41-42, 359
+time zones, 374-379
+about, 374
+between different time zones, 378
+Bitly links dataset
+counting time zones in pandas, 428-435
+counting time zones in Python, 426
+DST, 374, 378
+localization and conversion, 375-377
+pytz library, 374
+time zone-aware objects, 377
+UTC, 374, 378
+timedelta type, 41, 359
+timedelta() (datetime), 358
+%timeit(), 523-525
+Timestamp (pandas)
+formatting, 359-361
+shifting dates with offsets, 373
+time series basics, 362
+time zone-aware, 377
+timestamps, 357, 362
+normalized to midnight, 369
+timezone() (pytz), 375
+Titanic passenger survival dataset, 420
+to_csv(), 184
+to_datetime(), 360
+to_excel(), 195
+to_json(), 189
+to_numpy(), 406
+convert back to DataFrame, 406
+to_period(), 384
+to_pickle(), 193
+caution about long-term storage, 193
+to_timestamp(), 274
+trace function for debugger, 522
+transform(), 347
+transpose() with T attribute, 102
+True, 39
+try/except blocks, 74
+tuple(), 48
+tuples, 47-50
+exception types, 75
+methods, 50
+mutable and immutable, 48
+rest elements, 50
+set list-like elements to, 61
+SQL query results, 200
+string slicing, 36
+unpacking, 49
+type (Windows) to print file to screen, 177
+type casting, 40
+NumPy ndarrays, 90
+ValueError, 91
+type inference in reading text data, 177
+tzinfo type, 359
+tz_convert(), 376
+tz_localize(), 376, 377
+U
+ufuncs (universal functions) for ndarrays, 105
+methods, 106, 490-492
+pandas objects and, 158
+writing new in Python, 493
+custom compiled via Numba, 502
+faster with Numba, 501
+UInt16Dtype extension data type, 226
+UInt32Dtype extension data type, 226
+UInt64Dtype extension data type, 226
+UInt8Dtype extension data type, 226
+unary ufuncs, 105, 106
+underscore (_)
+data types with trailing underscores, 475
+tab completion and, 24
+unwanted variables, 50
+Unicode characters
+backslash (\) to escape in strings, 37
+bytes objects and, 38
+strings as sequences of, 36
+text mode default file behavior, 80
+union(), 60
+DataFrame method, 137
+unique and other set logic
+is_unique() property of indexes, 164
+Index 
+| 
+559
+ndarrays, 115
+pandas, 170-173
+repeated instances, 236
+US baby names dataset, 443-456
+naming trends analysis, 448-456
+gender and naming, 455
+increase in diversity, 449
+last letter revolution, 452
+USDA food database, 457-462
+universal functions (see ufuncs)
+Unix
+cat to print file to screen, 177, 184
+time zone-aware Timestamps, 378
+unstack(), 249, 270-273
+update() for sets, 60
+upsampling, 387, 391
+target period as superperiod, 393
+UTC (coordinated universal time), 374, 378
+UTF-8 encoding
+bytes encoding, 38
+open(), 76
+V
+value_counts(), 170, 236
+bar plot tip, 304
+categoricals
+new categories, 243
+performance of, 242
+VanderPlas, Jake, 423
+variables, 28
+binary operators, 32
+command history input and output vari‐
+ables, 515
+dynamic references, strong types, 29
+duck typing, 31
+module imports, 32
+namespace, 67
+None tested for via is operator, 34
+output of shell command, 517
+str immutable, 36
+underscore (_) for unwanted, 50
+vectorization with NumPy arrays, 91, 108, 110
+vectorize() (NumPy), 493
+version of Python used by book, 9
+vertical bar (|)
+OR, 32
+NumPy ndarrays, 99
+union of two sets, 60
+visualization
+about, 281
+book on data visualization, 317
+matplotlib
+about, 6, 281, 317
+API primer, 282
+configuration, 297
+documentation online, 286
+invoking, 282
+patch objects, 295
+plots saved to files, 296
+two-dimensional NumPy array, 108
+other Python tools, 317
+seaborn and pandas, 298-316
+about seaborn, 298, 306
+bar plots, 301-308
+box plots, 315
+density plots, 309-310
+documentation online, 316
+facet grids, 314-316
+histograms, 309-310
+line plots, 298-301
+scatter or point plots, 311-313
+vstack() (NumPy), 479
+W
+web API interactions, 197-199
+website for book
+book materials, 15
+installation instructions, 9
+week of month (WOM) dates, 371
+where() (NumPy), 268
+while loops, 44
+NumPy array vectorization instead, 85, 91,
+108, 110
+performance tip, 505
+whitespace
+Python indentation, 26
+strip() to trim, 227
+text file delimiter, 179
+Wickham, Hadley, 320, 443
+Wilke, Claus O., 317
+Williams, Ashley, 457-462
+Windows
+exit() to exit Python shell, 10, 18
+Miniconda installation, 9
+Python Tools for Visual Studio, 13
+type to print file to screen, 177
+writable() file, 79
+write() to a file, 79
+560 
+| 
+Index
+writelines() to a file, 79
+writing CSV files, 184
+writing data to a file
+binary data
+Excel format, 195
+HDF5 format, 504
+memory-mapped files, 503
+ndarrays saved, 116
+pickle format, 193
+pickle format caution, 193
+plots saved to files, 296
+text data
+CSV files, 184
+JSON data, 189
+missing data, 184
+other delimited format, 187
+subset of columns, 185
+X
+xlim() (matplotlib), 290
+XML file format, 189
+reading, 190
+Y
+yield in a function, 71
+Z
+zip files of datasets on GitHub, 15
+zip() for list of tuples, 62
+Index 
+| 
+561
+About the Author
+Wes McKinney is a Nashville-based software developer and entrepreneur. After
+finishing his undergraduate degree in mathematics at MIT in 2007, he went on to do
+quantitative finance work at AQR Capital Management in Greenwich, CT. Frustrated
+by cumbersome data analysis tools, he learned Python and started building what
+would later become the pandas project. He’s now an active member of the Python
+data community and is an advocate for the use of Python in data analysis, finance,
+and statistical computing applications.
+Wes was later the cofounder and CEO of DataPad, whose technology assets and
+team were acquired by Cloudera in 2014. He has since become involved in big data
+technology, joining the Project Management Committees for the Apache Arrow and
+Apache Parquet projects in the Apache Software Foundation. In 2018, he founded
+Ursa Labs, a not-for-profit organization focused on Apache Arrow development,
+in partnership with RStudio and Two Sigma Investments. In 2021, he cofounded
+technology startup Voltron Data, where he currently works as the Chief Technology
+Officer.
+Colophon
+The animal on the cover of Python for Data Analysis is a golden-tailed, or pen-tailed,
+tree shrew (Ptilocercus lowii). The golden-tailed tree shrew is the only one of its
+species in the genus Ptilocercus and family Ptilocercidae; all the other tree shrews
+are of the family Tupaiidae. Tree shrews are identified by their long tails and soft
+red-brown fur. As nicknamed, the golden-tailed tree shrew has a tail that resembles
+the feather on a quill pen. Tree shrews are omnivores, feeding primarily on insects,
+fruit, seeds, and small vertebrates.
+Found predominantly in Indonesia, Malaysia, and Thailand, these wild mammals are
+known for their chronic consumption of alcohol. Malaysian tree shrews were found
+to spend several hours consuming the naturally fermented nectar of the bertam palm,
+equalling about 10 to 12 glasses of wine with 3.8% alcohol content. Despite this, no
+golden-tailed tree shrew has ever been intoxicated, thanks largely to their impressive
+ability to break down ethanol, which includes metabolizing the alcohol in a way
+not used by humans. Also more impressive than any of their mammal counterparts,
+including humans, is their brain-to-body mass ratio.
+Despite its name, the golden-tailed shrew is not a true shrew; instead it is more
+closely related to primates. Because of their close relation, tree shrews have become
+an alternative to primates in medical experimentation for myopia, psychosocial stress,
+and hepatitis.
+The cover image is from Cassell’s Natural History. The cover fonts are URW Type‐
+writer and Guardian Sans. The text font is Adobe Minion Pro; the heading font is
+Adobe Myriad Condensed; and the code font is Dalton Maag’s Ubuntu Mono.
+Learn from experts. 
+Become one yourself.
+Books | Live online courses  
+Instant Answers | Virtual events
+Videos | Interactive learning
+Get started at oreilly.com. 
+©2022 O’Reilly Media, Inc. O’Reilly is a registered trademark of O’Reilly Media, Inc. | 175

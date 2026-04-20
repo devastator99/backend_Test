@@ -1,0 +1,52 @@
+Chapter 3 to enable you to follow along with the rest of the book.
+Much of this book focuses on table-based analytics and data preparation tools for
+working with datasets that are small enough to fit on your personal computer. To
+use these tools you must sometimes do some wrangling to arrange messy data into
+a more nicely tabular (or structured) form. Fortunately, Python is an ideal language
+for doing this. The greater your facility with the Python language and its built-in data
+types, the easier it will be for you to prepare new datasets for analysis.
+Some of the tools in this book are best explored from a live IPython or Jupyter
+session. Once you learn how to start up IPython and Jupyter, I recommend that you
+follow along with the examples so you can experiment and try different things. As
+17
+with any keyboard-driven console-like environment, developing familiarity with the
+common commands is also part of the learning curve.
+There are introductory Python concepts that this chapter does not
+cover, like classes and object-oriented programming, which you
+may find useful in your foray into data analysis in Python.
+To deepen your Python language knowledge, I recommend that
+you supplement this chapter with the official Python tutorial and
+potentially one of the many excellent books on general-purpose
+Python programming. Some recommendations to get you started
+include:
+• Python Cookbook, Third Edition, by David Beazley and Brian
+•
+K. Jones (O’Reilly)
+• Fluent Python by Luciano Ramalho (O’Reilly)
+•
+• Effective Python, Second Edition, by Brett Slatkin (Addison-
+•
+Wesley)
+2.1 The Python Interpreter
+Python is an interpreted language. The Python interpreter runs a program by execut‐
+ing one statement at a time. The standard interactive Python interpreter can be
+invoked on the command line with the python command:
+$ python
+Python 3.10.4 | packaged by conda-forge | (main, Mar 24 2022, 17:38:57)
+[GCC 10.3.0] on linux
+Type "help", "copyright", "credits" or "license" for more information.
+>>> a = 5
+>>> print(a)
+5
+The >>> you see is the prompt after which you’ll type code expressions. To exit the
+Python interpreter, you can either type exit() or press Ctrl-D (works on Linux and
+macOS only).
+Running Python programs is as simple as calling python with a .py file as its first
+argument. Suppose we had created hello_world.py with these contents:
+print("Hello world")
+You can run it by executing the following command (the hello_world.py file must be
+in your current working terminal directory):
+$ python hello_world.py
+Hello world
+18 
+|

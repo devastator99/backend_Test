@@ -1,0 +1,59 @@
+CHAPTER 3
+Built-In Data Structures,
+Functions, and Files
+This chapter discusses capabilities built into the Python language that will be used
+ubiquitously throughout the book. While add-on libraries like pandas and NumPy
+add advanced computational functionality for larger datasets, they are designed to be
+used together with Python’s built-in data manipulation tools.
+We’ll start with Python’s workhorse data structures: tuples, lists, dictionaries, and sets.
+Then, we’ll discuss creating your own reusable Python functions. Finally, we’ll look at
+the mechanics of Python file objects and interacting with your local hard drive.
+3.1 Data Structures and Sequences
+Python’s data structures are simple but powerful. Mastering their use is a critical
+part of becoming a proficient Python programmer. We start with tuple, list, and
+dictionary, which are some of the most frequently used sequence types.
+Tuple
+A tuple is a fixed-length, immutable sequence of Python objects which, once assigned,
+cannot be changed. The easiest way to create one is with a comma-separated
+sequence of values wrapped in parentheses:
+In [2]: tup = (4, 5, 6)
+In [3]: tup
+Out[3]: (4, 5, 6)
+47
+In many contexts, the parentheses can be omitted, so here we could also have written:
+In [4]: tup = 4, 5, 6
+In [5]: tup
+Out[5]: (4, 5, 6)
+You can convert any sequence or iterator to a tuple by invoking tuple:
+In [6]: tuple([4, 0, 2])
+Out[6]: (4, 0, 2)
+In [7]: tup = tuple('string')
+In [8]: tup
+Out[8]: ('s', 't', 'r', 'i', 'n', 'g')
+Elements can be accessed with square brackets [] as with most other sequence types.
+As in C, C++, Java, and many other languages, sequences are 0-indexed in Python:
+In [9]: tup[0]
+Out[9]: 's'
+When you’re defining tuples within more complicated expressions, it’s often neces‐
+sary to enclose the values in parentheses, as in this example of creating a tuple of
+tuples:
+In [10]: nested_tup = (4, 5, 6), (7, 8)
+In [11]: nested_tup
+Out[11]: ((4, 5, 6), (7, 8))
+In [12]: nested_tup[0]
+Out[12]: (4, 5, 6)
+In [13]: nested_tup[1]
+Out[13]: (7, 8)
+While the objects stored in a tuple may be mutable themselves, once the tuple is
+created it’s not possible to modify which object is stored in each slot:
+In [14]: tup = tuple(['foo', [1, 2], True])
+In [15]: tup[2] = False
+---------------------------------------------------------------------------
+TypeError                                 Traceback (most recent call last)
+<ipython-input-15-b89d0c4ae599> in <module>
+----> 1 tup[2] = False
+TypeError: 'tuple' object does not support item assignment
+If an object inside a tuple is mutable, such as a list, you can modify it in place:
+In [16]: tup[1].append(3)
+48 
+|

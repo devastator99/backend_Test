@@ -1,0 +1,61 @@
+CHAPTER 5
+Getting Started with pandas
+pandas will be a major tool of interest throughout much of the rest of the book. It
+contains data structures and data manipulation tools designed to make data cleaning
+and analysis fast and convenient in Python. pandas is often used in tandem with
+numerical computing tools like NumPy and SciPy, analytical libraries like statsmo‐
+dels and scikit-learn, and data visualization libraries like matplotlib. pandas adopts
+significant parts of NumPy’s idiomatic style of array-based computing, especially
+array-based functions and a preference for data processing without for loops.
+While pandas adopts many coding idioms from NumPy, the biggestabout difference
+is that pandas is designed for working with tabular or heterogeneous data. NumPy, by
+contrast, is best suited for working with homogeneously typed numerical array data.
+Since becoming an open source project in 2010, pandas has matured into a quite
+large library that’s applicable in a broad set of real-world use cases. The developer
+community has grown to over 2,500 distinct contributors, who’ve been helping build
+the project as they used it to solve their day-to-day data problems. The vibrant pandas
+developer and user communities have been a key part of its success.
+Many people don’t know that I haven’t been actively involved in
+day-to-day pandas development since 2013; it has been an entirely
+community-managed project since then. Be sure to pass on your
+thanks to the core development and all the contributors for their
+hard work!
+123
+Throughout the rest of the book, I use the following import conventions for NumPy
+and pandas:
+In [1]: import numpy as np
+In [2]: import pandas as pd
+Thus, whenever you see pd. in code, it’s referring to pandas. You may also find it
+easier to import Series and DataFrame into the local namespace since they are so
+frequently used:
+In [3]: from pandas import Series, DataFrame
+5.1 Introduction to pandas Data Structures
+To get started with pandas, you will need to get comfortable with its two workhorse
+data structures: Series and DataFrame. While they are not a universal solution for
+every problem, they provide a solid foundation for a wide variety of data tasks.
+Series
+A Series is a one-dimensional array-like object containing a sequence of values (of
+similar types to NumPy types) of the same type and an associated array of data labels,
+called its index. The simplest Series is formed from only an array of data:
+In [14]: obj = pd.Series([4, 7, -5, 3])
+In [15]: obj
+Out[15]: 
+0    4
+1    7
+2   -5
+3    3
+dtype: int64
+The string representation of a Series displayed interactively shows the index on the
+left and the values on the right. Since we did not specify an index for the data, a
+default one consisting of the integers 0 through N - 1 (where N is the length of the
+data) is created. You can get the array representation and index object of the Series via
+its array and index attributes, respectively:
+In [16]: obj.array
+Out[16]: 
+<PandasArray>
+[4, 7, -5, 3]
+Length: 4, dtype: int64
+In [17]: obj.index
+Out[17]: RangeIndex(start=0, stop=4, step=1)
+124 
+|

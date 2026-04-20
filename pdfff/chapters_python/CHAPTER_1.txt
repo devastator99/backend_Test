@@ -1,0 +1,67 @@
+CHAPTER 1
+Preliminaries
+1.1 What Is This Book About?
+This book is concerned with the nuts and bolts of manipulating, processing, cleaning,
+and crunching data in Python. My goal is to offer a guide to the parts of the Python
+programming language and its data-oriented library ecosystem and tools that will
+equip you to become an effective data analyst. While “data analysis” is in the title
+of the book, the focus is specifically on Python programming, libraries, and tools as
+opposed to data analysis methodology. This is the Python programming you need for
+data analysis.
+Sometime after I originally published this book in 2012, people started using the
+term data science as an umbrella description for everything from simple descriptive
+statistics to more advanced statistical analysis and machine learning. The Python
+open source ecosystem for doing data analysis (or data science) has also expanded
+significantly since then. There are now many other books which focus specifically on
+these more advanced methodologies. My hope is that this book serves as adequate
+preparation to enable you to move on to a more domain-specific resource.
+Some might characterize much of the content of the book as “data
+manipulation” as opposed to “data analysis.” We also use the terms
+wrangling or munging to refer to data manipulation.
+What Kinds of Data?
+When I say “data,” what am I referring to exactly? The primary focus is on structured
+data, a deliberately vague term that encompasses many different common forms of
+data, such as:
+1
+• Tabular or spreadsheet-like data in which each column may be a different type
+•
+(string, numeric, date, or otherwise). This includes most kinds of data commonly
+stored in relational databases or tab- or comma-delimited text files.
+• Multidimensional arrays (matrices).
+•
+• Multiple tables of data interrelated by key columns (what would be primary or
+•
+foreign keys for a SQL user).
+• Evenly or unevenly spaced time series.
+•
+This is by no means a complete list. Even though it may not always be obvious, a
+large percentage of datasets can be transformed into a structured form that is more
+suitable for analysis and modeling. If not, it may be possible to extract features from
+a dataset into a structured form. As an example, a collection of news articles could
+be processed into a word frequency table, which could then be used to perform
+sentiment analysis.
+Most users of spreadsheet programs like Microsoft Excel, perhaps the most widely
+used data analysis tool in the world, will not be strangers to these kinds of data.
+1.2 Why Python for Data Analysis?
+For many people, the Python programming language has strong appeal. Since its
+first appearance in 1991, Python has become one of the most popular interpreted
+programming languages, along with Perl, Ruby, and others. Python and Ruby have
+become especially popular since 2005 or so for building websites using their numer‐
+ous web frameworks, like Rails (Ruby) and Django (Python). Such languages are
+often called scripting languages, as they can be used to quickly write small programs,
+or scripts to automate other tasks. I don’t like the term “scripting languages,” as it
+carries a connotation that they cannot be used for building serious software. Among
+interpreted languages, for various historical and cultural reasons, Python has devel‐
+oped a large and active scientific computing and data analysis community. In the last
+20 years, Python has gone from a bleeding-edge or “at your own risk” scientific com‐
+puting language to one of the most important languages for data science, machine
+learning, and general software development in academia and industry.
+For data analysis and interactive computing and data visualization, Python will inevi‐
+tably draw comparisons with other open source and commercial programming lan‐
+guages and tools in wide use, such as R, MATLAB, SAS, Stata, and others. In recent
+years, Python’s improved open source libraries (such as pandas and scikit-learn) have
+made it a popular choice for data analysis tasks. Combined with Python’s overall
+strength for general-purpose software engineering, it is an excellent option as a
+primary language for building data applications.
+2 
+|

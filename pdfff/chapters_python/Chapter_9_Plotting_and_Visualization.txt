@@ -1,0 +1,26 @@
+Chapter 9: Plotting and Visualization
+9.3 Other Python Visualization Tools
+As is common with open source, there many options for creating graphics in Python
+(too many to list). Since 2010, much development effort has been focused on creating
+interactive graphics for publication on the web. With tools like Altair, Bokeh, and
+Plotly, it’s now possible to specify dynamic, interactive graphics in Python that are
+intended for use with web browsers.
+For creating static graphics for print or web, I recommend using matplotlib and
+libraries that build on matplotlib, like pandas and seaborn, for your needs. For other
+data visualization requirements, it may be useful to learn how to use one of the other
+available tools. I encourage you to explore the ecosystem as it continues to evolve and
+innovate into the future.
+An excellent book on data visualization is Fundamentals of Data Visualization by
+Claus O. Wilke (O’Reilly), which is available in print or on Claus’s website at https://
+clauswilke.com/dataviz.
+9.4 Conclusion
+The goal of this chapter was to get your feet wet with some basic data visualization
+using pandas, matplotlib, and seaborn. If visually communicating the results of data
+analysis is important in your work, I encourage you to seek out resources to learn
+more about effective data visualization. It is an active field of research, and you can
+practice with many excellent learning resources available online and in print.
+In the next chapter, we turn our attention to data aggregation and group operations
+with pandas.
+9.3 Other Python Visualization Tools 
+| 
+317

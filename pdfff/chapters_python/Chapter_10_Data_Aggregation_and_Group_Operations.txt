@@ -1,0 +1,37 @@
+Chapter 10: Data Aggregation and Group Operations
+5       6       Japan  Right-handed
+6       7         USA  Right-handed
+7       8         USA   Left-handed
+8       9       Japan  Right-handed
+9      10         USA  Right-handed
+As part of some survey analysis, we might want to summarize this data by nationality
+and handedness. You could use pivot_table to do this, but the pandas.crosstab
+function can be more convenient:
+In [171]: pd.crosstab(data["Nationality"], data["Handedness"], margins=True)
+Out[171]: 
+Handedness   Left-handed  Right-handed  All
+Nationality                                
+Japan                  2             3    5
+USA                    1             4    5
+All                    3             7   10
+The first two arguments to crosstab can each be an array or Series or a list of arrays.
+As in the tips data:
+In [172]: pd.crosstab([tips["time"], tips["day"]], tips["smoker"], margins=True)
+Out[172]: 
+smoker        No  Yes  All
+time   day                
+Dinner Fri     3    9   12
+       Sat    45   42   87
+       Sun    57   19   76
+       Thur    1    0    1
+Lunch  Fri     1    6    7
+       Thur   44   17   61
+All          151   93  244
+10.6 Conclusion
+Mastering pandas’s data grouping tools can help with data cleaning and modeling or
+statistical analysis work. In Chapter 13 we will look at several more example use cases
+for groupby on real data.
+In the next chapter, we turn our attention to time series data.
+10.6 Conclusion 
+| 
+355
