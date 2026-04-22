@@ -278,7 +278,9 @@ const responseTimeMiddleware = (req, res, next) => {
   
   res.on('finish', () => {
     const responseTime = Date.now() - startTime;
-    res.setHeader('X-Response-Time', `${responseTime}ms`);
+    if (!res.headersSent) {
+      res.setHeader('X-Response-Time', `${responseTime}ms`);
+    }
   });
   
   next();

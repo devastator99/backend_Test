@@ -10,6 +10,7 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/app/prisma/dev.db
+      - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
       - PORT=3000
     depends_on:

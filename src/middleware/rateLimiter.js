@@ -65,9 +65,25 @@ const sensitiveRateLimiter = new RateLimiterMemory({
 });
 
 const createRateLimitMiddleware = (limiter, options = {}) => {
-  return async (req, res, next) => {
+  const keyGenerator = options.keyGenerator || rateLimiterOptions.keyGenerator;
+  const excludedPaths = new Set(options.excludePaths || []);
+
+  const keyForRequest = (req) => {
     try {
-      const key = limiter.keyGenerator(req);
+      return keyGenerator(req);
+    } catch (error) {
+      return `ip:${req.ip || req.connection?.remoteAddress || 'unknown'}`;
+    }
+  };
+
+  return async (req, res, next) => {
+    const path = (req.originalUrl || req.path || '').split('?')[0];
+    if (excludedPaths.has(path)) {
+      return next();
+    }
+
+    try {
+      const key = keyForRequest(req);
       const result = await limiter.consume(key);
       
       res.set({
@@ -87,7 +103,7 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
         'X-RateLimit-Reset': formatResetHeader(rejRes?.msBeforeNext),
       });
       
-      const key = limiter.keyGenerator(req);
+      const key = keyForRequest(req);
       securityLogger.logRateLimitExceeded(req.ip, req.originalUrl);
       
       if (options.logSuspicious) {
@@ -121,22 +137,36 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
 };
 
 const rateLimitMiddleware = createRateLimitMiddleware(rateLimiter, {
+  keyGenerator: rateLimiterOptions.keyGenerator,
+  excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
   message: 'Too many requests. Please try again later.',
   includeDetails: false,
 });
 
 const authRateLimitMiddleware = createRateLimitMiddleware(authRateLimiter, {
+  keyGenerator: (req) => req.ip,
+  excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
   message: 'Too many authentication attempts. Please try again later.',
   includeDetails: true,
   logSuspicious: true,
 });
 
 const uploadRateLimitMiddleware = createRateLimitMiddleware(uploadRateLimiter, {
+  keyGenerator: (req) => {
+    const userId = req.user?.id;
+    return userId ? `upload:${userId}` : `upload:${req.ip}`;
+  },
+  excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
   message: 'Upload limit exceeded. Please try again later.',
   includeDetails: true,
 });
 
 const sensitiveRateLimitMiddleware = createRateLimitMiddleware(sensitiveRateLimiter, {
+  keyGenerator: (req) => {
+    const userId = req.user?.id;
+    return userId ? `sensitive:${userId}` : `sensitive:${req.ip}`;
+  },
+  excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
   message: 'Too many sensitive operations. Please try again later.',
   includeDetails: true,
   logSuspicious: true,
@@ -157,7 +187,11 @@ const createCustomRateLimiter = (options) => {
         ...options,
       });
   
-  return createRateLimitMiddleware(limiter, options.middlewareOptions || {});
+  return createRateLimitMiddleware(limiter, {
+    keyGenerator: options.keyGenerator || rateLimiterOptions.keyGenerator,
+    excludePaths: options.excludePaths || [],
+    ...(options.middlewareOptions || {}),
+  });
 };
 
 const getRateLimitStatus = async (key, limiter = rateLimiter) => {
@@ -194,7 +228,10 @@ const rateLimitMiddlewareWithUser = (req, res, next) => {
       points: 50,
       duration: 60,
       blockDuration: 60,
-    }))(req, res, next);
+    }), {
+      keyGenerator: (req) => req.ip,
+      excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
+    })(req, res, next);
   }
 };
 
