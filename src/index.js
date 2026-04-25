@@ -212,6 +212,10 @@ app.get('/', (req, res) => {
   res.redirect(302, '/api');
 });
 
+// Common Kubernetes/monitoring aliases
+app.get('/live', livenessProbe);
+app.get('/ready', readinessProbe);
+
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 

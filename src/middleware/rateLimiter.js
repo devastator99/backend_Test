@@ -138,14 +138,14 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
 
 const rateLimitMiddleware = createRateLimitMiddleware(rateLimiter, {
   keyGenerator: rateLimiterOptions.keyGenerator,
-  excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
+  excludePaths: ['/health', '/metrics', '/liveness', '/readiness', '/live', '/ready'],
   message: 'Too many requests. Please try again later.',
   includeDetails: false,
 });
 
 const authRateLimitMiddleware = createRateLimitMiddleware(authRateLimiter, {
   keyGenerator: (req) => req.ip,
-  excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
+  excludePaths: ['/health', '/metrics', '/liveness', '/readiness', '/live', '/ready'],
   message: 'Too many authentication attempts. Please try again later.',
   includeDetails: true,
   logSuspicious: true,
@@ -156,7 +156,7 @@ const uploadRateLimitMiddleware = createRateLimitMiddleware(uploadRateLimiter, {
     const userId = req.user?.id;
     return userId ? `upload:${userId}` : `upload:${req.ip}`;
   },
-  excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
+  excludePaths: ['/health', '/metrics', '/liveness', '/readiness', '/live', '/ready'],
   message: 'Upload limit exceeded. Please try again later.',
   includeDetails: true,
 });
@@ -166,7 +166,7 @@ const sensitiveRateLimitMiddleware = createRateLimitMiddleware(sensitiveRateLimi
     const userId = req.user?.id;
     return userId ? `sensitive:${userId}` : `sensitive:${req.ip}`;
   },
-  excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
+  excludePaths: ['/health', '/metrics', '/liveness', '/readiness', '/live', '/ready'],
   message: 'Too many sensitive operations. Please try again later.',
   includeDetails: true,
   logSuspicious: true,
@@ -230,7 +230,7 @@ const rateLimitMiddlewareWithUser = (req, res, next) => {
       blockDuration: 60,
     }), {
       keyGenerator: (req) => req.ip,
-      excludePaths: ['/health', '/metrics', '/liveness', '/readiness'],
+      excludePaths: ['/health', '/metrics', '/liveness', '/readiness', '/live', '/ready'],
     })(req, res, next);
   }
 };
