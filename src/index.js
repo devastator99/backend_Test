@@ -37,6 +37,7 @@ const {
 const { 
   healthCheck, 
   simpleHealthCheck, 
+  statusEndpoint,
   livenessProbe, 
   readinessProbe 
 } = require('./middleware/healthCheck');
@@ -84,7 +85,7 @@ app.use(metricsMiddleware);
 app.use(compressionHeaders);
 app.use(selectiveCompression({
   enabled: process.env.COMPRESSION_ENABLED !== 'false',
-  excludeRoutes: ['/health', '/metrics', '/liveness', '/readiness'],
+  excludeRoutes: ['/health', '/metrics', '/status', '/liveness', '/readiness', '/live', '/ready'],
   includeRoutes: ['/api', '/api-docs'],
   minSize: 1024
 }));
@@ -150,6 +151,8 @@ app.get('/health', async (req, res) => {
     });
   }
 });
+
+app.get('/status', statusEndpoint);
 
 app.get('/api', cacheMiddleware(300), (req, res) => {
   res.json({

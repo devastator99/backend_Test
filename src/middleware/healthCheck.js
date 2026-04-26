@@ -156,6 +156,19 @@ const simpleHealthCheck = (req, res) => {
 };
 
 /**
+ * Lightweight status endpoint for quick operational checks
+ */
+const statusEndpoint = (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'Interview Backend API',
+    uptime: formatUptime(process.uptime()),
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+};
+
+/**
  * Liveness probe for Kubernetes/Docker
  */
 const livenessProbe = (req, res) => {
@@ -207,6 +220,7 @@ function formatUptime(seconds) {
 module.exports = {
   healthCheck,
   simpleHealthCheck,
+  statusEndpoint,
   livenessProbe,
   readinessProbe
 };
