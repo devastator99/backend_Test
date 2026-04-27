@@ -1,7 +1,6 @@
 const { RateLimiterMemory, RateLimiterRedis } = require('rate-limiter-flexible');
 const Redis = require('ioredis');
 const { securityLogger } = require('../utils/logger');
-const { TooManyRequestsError } = require('../utils/errors');
 
 const redisClient = process.env.REDIS_URL 
   ? new Redis(process.env.REDIS_URL, {
@@ -11,15 +10,55 @@ const redisClient = process.env.REDIS_URL
     })
   : null;
 
+const EXCLUDED_RATE_LIMIT_PATHS = new Set([
+  '/health',
+  '/metrics',
+  '/status',
+  '/liveness',
+  '/readiness',
+  '/live',
+  '/ready',
+]);
+
 const rateLimiterOptions = {
-  keyGenerator: (req) => {
-    const userId = req.user?.id;
-    const ip = req.ip || req.connection.remoteAddress;
-    return userId ? `user:${userId}` : `ip:${ip}`;
-  },
   points: 100,
   duration: 60,
   blockDuration: 60,
+};
+
+const normalizeIpAddress = (ip) => {
+  if (!ip || typeof ip !== 'string') {
+    return 'unknown';
+  }
+
+  const trimmed = ip.trim();
+  return trimmed.startsWith('::ffff:') ? trimmed.slice(7) : trimmed;
+};
+
+const getClientIp = (req) => {
+  const forwardedFor = req.headers?.['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return normalizeIpAddress(forwardedFor.split(',')[0]);
+  }
+
+  const realIp = req.headers?.['x-real-ip'];
+  if (typeof realIp === 'string' && realIp.trim()) {
+    return normalizeIpAddress(realIp);
+  }
+
+  return normalizeIpAddress(
+    req.ip ||
+    req.socket?.remoteAddress ||
+    req.connection?.remoteAddress ||
+    'unknown'
+  );
+};
+
+const defaultKeyGenerator = (req) => {
+  const userId = req.user?.id;
+  const clientIp = getClientIp(req);
+
+  return userId ? `user:${userId}` : `ip:${clientIp}`;
 };
 
 const formatResetHeader = (msBeforeNext) => {
@@ -27,52 +66,57 @@ const formatResetHeader = (msBeforeNext) => {
   return new Date(Date.now() + delayMs).toISOString();
 };
 
-const rateLimiter = redisClient 
-  ? new RateLimiterRedis({
-      ...rateLimiterOptions,
+const buildLimiter = (options = {}) => {
+  const limiterOptions = {
+    ...rateLimiterOptions,
+    ...options,
+  };
+
+  if (redisClient) {
+    return new RateLimiterRedis({
+      ...limiterOptions,
       storeClient: redisClient,
       redisOptions: {
         enableOfflineQueue: false,
       },
-    })
-  : new RateLimiterMemory(rateLimiterOptions);
+    });
+  }
+
+  return new RateLimiterMemory(limiterOptions);
+};
+
+const rateLimiter = buildLimiter();
 
 const authRateLimiter = new RateLimiterMemory({
-  keyGenerator: (req) => req.ip,
   points: 5,
   duration: 900, // 15 minutes
   blockDuration: 900,
 });
 
 const uploadRateLimiter = new RateLimiterMemory({
-  keyGenerator: (req) => {
-    const userId = req.user?.id;
-    return userId ? `upload:${userId}` : `upload:${req.ip}`;
-  },
   points: 10,
   duration: 3600, // 1 hour
   blockDuration: 3600,
 });
 
 const sensitiveRateLimiter = new RateLimiterMemory({
-  keyGenerator: (req) => {
-    const userId = req.user?.id;
-    return userId ? `sensitive:${userId}` : `sensitive:${req.ip}`;
-  },
   points: 3,
   duration: 1800, // 30 minutes
   blockDuration: 1800,
 });
 
 const createRateLimitMiddleware = (limiter, options = {}) => {
-  const keyGenerator = options.keyGenerator || rateLimiterOptions.keyGenerator;
-  const excludedPaths = new Set(options.excludePaths || []);
+  const keyGenerator = options.keyGenerator || defaultKeyGenerator;
+  const excludedPaths = new Set([
+    ...EXCLUDED_RATE_LIMIT_PATHS,
+    ...(options.excludePaths || []),
+  ]);
 
   const keyForRequest = (req) => {
     try {
       return keyGenerator(req);
     } catch (error) {
-      return `ip:${req.ip || req.connection?.remoteAddress || 'unknown'}`;
+      return `ip:${getClientIp(req)}`;
     }
   };
 
@@ -85,30 +129,33 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
     try {
       const key = keyForRequest(req);
       const result = await limiter.consume(key);
+      const limit = limiter.points ?? options.points ?? 0;
       
       res.set({
-        'X-RateLimit-Limit': limiter.points,
+        'X-RateLimit-Limit': limit,
         'X-RateLimit-Remaining': result.remainingPoints,
         'X-RateLimit-Reset': formatResetHeader(result.msBeforeNext),
       });
       
       next();
     } catch (rejRes) {
-      const secs = Math.round(rejRes.msBeforeNext / 1000) || 1;
+      const secs = Math.max(1, Math.ceil((rejRes?.msBeforeNext || 0) / 1000));
+      const limit = limiter.points ?? options.points ?? 0;
       
       res.set({
         'Retry-After': String(secs),
-        'X-RateLimit-Limit': limiter.points,
+        'X-RateLimit-Limit': limit,
         'X-RateLimit-Remaining': '0',
         'X-RateLimit-Reset': formatResetHeader(rejRes?.msBeforeNext),
       });
       
       const key = keyForRequest(req);
-      securityLogger.logRateLimitExceeded(req.ip, req.originalUrl);
+      const clientIp = getClientIp(req);
+      securityLogger.logRateLimitExceeded(clientIp, req.originalUrl);
       
       if (options.logSuspicious) {
         securityLogger.logSuspiciousActivity('Rate limit exceeded', {
-          ip: req.ip,
+          ip: clientIp,
           endpoint: req.originalUrl,
           method: req.method,
           userAgent: req.get('User-Agent'),
@@ -125,9 +172,9 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
       
       if (options.includeDetails) {
         errorResponse.details = {
-          limit: limiter.points,
+          limit,
           windowMs: limiter.duration * 1000,
-          retryAfterMs: rejRes.msBeforeNext,
+          retryAfterMs: rejRes?.msBeforeNext || 0,
         };
       }
       
@@ -137,15 +184,12 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
 };
 
 const rateLimitMiddleware = createRateLimitMiddleware(rateLimiter, {
-  keyGenerator: rateLimiterOptions.keyGenerator,
-  excludePaths: ['/health', '/metrics', '/status', '/liveness', '/readiness', '/live', '/ready'],
   message: 'Too many requests. Please try again later.',
   includeDetails: false,
 });
 
 const authRateLimitMiddleware = createRateLimitMiddleware(authRateLimiter, {
-  keyGenerator: (req) => req.ip,
-  excludePaths: ['/health', '/metrics', '/status', '/liveness', '/readiness', '/live', '/ready'],
+  keyGenerator: (req) => `ip:${getClientIp(req)}`,
   message: 'Too many authentication attempts. Please try again later.',
   includeDetails: true,
   logSuspicious: true,
@@ -154,9 +198,8 @@ const authRateLimitMiddleware = createRateLimitMiddleware(authRateLimiter, {
 const uploadRateLimitMiddleware = createRateLimitMiddleware(uploadRateLimiter, {
   keyGenerator: (req) => {
     const userId = req.user?.id;
-    return userId ? `upload:${userId}` : `upload:${req.ip}`;
+    return userId ? `upload:${userId}` : `upload:${getClientIp(req)}`;
   },
-  excludePaths: ['/health', '/metrics', '/status', '/liveness', '/readiness', '/live', '/ready'],
   message: 'Upload limit exceeded. Please try again later.',
   includeDetails: true,
 });
@@ -164,33 +207,21 @@ const uploadRateLimitMiddleware = createRateLimitMiddleware(uploadRateLimiter, {
 const sensitiveRateLimitMiddleware = createRateLimitMiddleware(sensitiveRateLimiter, {
   keyGenerator: (req) => {
     const userId = req.user?.id;
-    return userId ? `sensitive:${userId}` : `sensitive:${req.ip}`;
+    return userId ? `sensitive:${userId}` : `sensitive:${getClientIp(req)}`;
   },
-  excludePaths: ['/health', '/metrics', '/status', '/liveness', '/readiness', '/live', '/ready'],
   message: 'Too many sensitive operations. Please try again later.',
   includeDetails: true,
   logSuspicious: true,
 });
 
 const createCustomRateLimiter = (options) => {
-  const limiter = redisClient 
-    ? new RateLimiterRedis({
-        ...rateLimiterOptions,
-        ...options,
-        storeClient: redisClient,
-        redisOptions: {
-          enableOfflineQueue: false,
-        },
-      })
-    : new RateLimiterMemory({
-        ...rateLimiterOptions,
-        ...options,
-      });
+  const { middlewareOptions = {}, ...limiterOptions } = options || {};
+  const limiter = buildLimiter(limiterOptions);
   
   return createRateLimitMiddleware(limiter, {
-    keyGenerator: options.keyGenerator || rateLimiterOptions.keyGenerator,
-    excludePaths: options.excludePaths || [],
-    ...(options.middlewareOptions || {}),
+    keyGenerator: limiterOptions.keyGenerator || defaultKeyGenerator,
+    excludePaths: limiterOptions.excludePaths || [],
+    ...middlewareOptions,
   });
 };
 
@@ -198,8 +229,8 @@ const getRateLimitStatus = async (key, limiter = rateLimiter) => {
   try {
     const res = await limiter.get(key);
     return {
-      remainingPoints: res?.remainingPoints || limiter.points,
-      msBeforeNext: res?.msBeforeNext || 0,
+      remainingPoints: res?.remainingPoints ?? limiter.points,
+      msBeforeNext: res?.msBeforeNext ?? 0,
     };
   } catch (error) {
     return {
@@ -219,20 +250,22 @@ const resetRateLimit = async (key, limiter = rateLimiter) => {
   }
 };
 
+const anonymousRateLimiter = new RateLimiterMemory({
+  points: 50,
+  duration: 60,
+  blockDuration: 60,
+});
+
+const anonymousRateLimitMiddleware = createRateLimitMiddleware(anonymousRateLimiter, {
+  keyGenerator: (req) => `ip:${getClientIp(req)}`,
+});
+
 const rateLimitMiddlewareWithUser = (req, res, next) => {
   if (req.user) {
     return rateLimitMiddleware(req, res, next);
-  } else {
-    return createRateLimitMiddleware(new RateLimiterMemory({
-      keyGenerator: (req) => req.ip,
-      points: 50,
-      duration: 60,
-      blockDuration: 60,
-    }), {
-      keyGenerator: (req) => req.ip,
-      excludePaths: ['/health', '/metrics', '/status', '/liveness', '/readiness', '/live', '/ready'],
-    })(req, res, next);
   }
+
+  return anonymousRateLimitMiddleware(req, res, next);
 };
 
 process.on('SIGTERM', async () => {
@@ -248,6 +281,9 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = {
+  createRateLimitMiddleware,
+  getClientIp,
+  normalizeIpAddress,
   rateLimitMiddleware,
   authRateLimitMiddleware,
   uploadRateLimitMiddleware,
