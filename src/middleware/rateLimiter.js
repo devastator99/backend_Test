@@ -26,6 +26,8 @@ const rateLimiterOptions = {
   blockDuration: 60,
 };
 
+const getRequestPath = (req) => (req.originalUrl || req.path || '').split('?')[0];
+
 const normalizeIpAddress = (ip) => {
   if (!ip || typeof ip !== 'string') {
     return 'unknown';
@@ -64,6 +66,20 @@ const defaultKeyGenerator = (req) => {
 const formatResetHeader = (msBeforeNext) => {
   const delayMs = Number.isFinite(msBeforeNext) ? Math.max(0, msBeforeNext) : 0;
   return new Date(Date.now() + delayMs).toISOString();
+};
+
+const setRateLimitHeaders = (res, { limit, remaining, reset, retryAfter }) => {
+  const headers = {
+    'X-RateLimit-Limit': limit,
+    'X-RateLimit-Remaining': remaining,
+    'X-RateLimit-Reset': reset,
+  };
+
+  if (retryAfter !== undefined) {
+    headers['Retry-After'] = String(retryAfter);
+  }
+
+  res.set(headers);
 };
 
 const buildLimiter = (options = {}) => {
@@ -121,7 +137,7 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
   };
 
   return async (req, res, next) => {
-    const path = (req.originalUrl || req.path || '').split('?')[0];
+    const path = getRequestPath(req);
     if (excludedPaths.has(path)) {
       return next();
     }
@@ -130,46 +146,48 @@ const createRateLimitMiddleware = (limiter, options = {}) => {
       const key = keyForRequest(req);
       const result = await limiter.consume(key);
       const limit = limiter.points ?? options.points ?? 0;
-      
-      res.set({
-        'X-RateLimit-Limit': limit,
-        'X-RateLimit-Remaining': result.remainingPoints,
-        'X-RateLimit-Reset': formatResetHeader(result.msBeforeNext),
+
+      setRateLimitHeaders(res, {
+        limit,
+        remaining: result.remainingPoints,
+        reset: formatResetHeader(result.msBeforeNext),
       });
-      
+
       next();
     } catch (rejRes) {
       const secs = Math.max(1, Math.ceil((rejRes?.msBeforeNext || 0) / 1000));
       const limit = limiter.points ?? options.points ?? 0;
-      
-      res.set({
-        'Retry-After': String(secs),
-        'X-RateLimit-Limit': limit,
-        'X-RateLimit-Remaining': '0',
-        'X-RateLimit-Reset': formatResetHeader(rejRes?.msBeforeNext),
+
+      setRateLimitHeaders(res, {
+        limit,
+        remaining: '0',
+        reset: formatResetHeader(rejRes?.msBeforeNext),
+        retryAfter: secs,
       });
-      
+
       const key = keyForRequest(req);
       const clientIp = getClientIp(req);
-      securityLogger.logRateLimitExceeded(clientIp, req.originalUrl);
-      
+      const endpoint = req.originalUrl || req.url || req.path || '/';
+
+      securityLogger.logRateLimitExceeded(clientIp, endpoint);
+
       if (options.logSuspicious) {
         securityLogger.logSuspiciousActivity('Rate limit exceeded', {
           ip: clientIp,
-          endpoint: req.originalUrl,
+          endpoint,
           method: req.method,
           userAgent: req.get('User-Agent'),
           key,
         });
       }
-      
+
       const errorResponse = {
         success: false,
         message: options.message || 'Too many requests',
         retryAfter: secs,
         timestamp: new Date().toISOString(),
       };
-      
+
       if (options.includeDetails) {
         errorResponse.details = {
           limit,
@@ -217,7 +235,7 @@ const sensitiveRateLimitMiddleware = createRateLimitMiddleware(sensitiveRateLimi
 const createCustomRateLimiter = (options) => {
   const { middlewareOptions = {}, ...limiterOptions } = options || {};
   const limiter = buildLimiter(limiterOptions);
-  
+
   return createRateLimitMiddleware(limiter, {
     keyGenerator: limiterOptions.keyGenerator || defaultKeyGenerator,
     excludePaths: limiterOptions.excludePaths || [],
@@ -268,17 +286,21 @@ const rateLimitMiddlewareWithUser = (req, res, next) => {
   return anonymousRateLimitMiddleware(req, res, next);
 };
 
-process.on('SIGTERM', async () => {
-  if (redisClient) {
-    await redisClient.quit();
-  }
-});
+let shutdownHandlersRegistered = false;
 
-process.on('SIGINT', async () => {
-  if (redisClient) {
-    await redisClient.quit();
+const closeRedisClient = async () => {
+  if (!redisClient || redisClient.status === 'end') {
+    return;
   }
-});
+
+  await redisClient.quit();
+};
+
+if (!shutdownHandlersRegistered) {
+  shutdownHandlersRegistered = true;
+  process.once('SIGTERM', closeRedisClient);
+  process.once('SIGINT', closeRedisClient);
+}
 
 module.exports = {
   createRateLimitMiddleware,
