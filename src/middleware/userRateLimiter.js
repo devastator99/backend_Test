@@ -328,8 +328,8 @@ class UserRateLimiter {
             resetTime: emailRes ? new Date(Date.now() + emailRes.msBeforeNext).toISOString() : null
           },
           jobs: {
-            limit: 50, // Default job limit
-            remaining: jobRes ? jobRes.remainingPoints : 50,
+            limit: this.jobLimiter.points,
+            remaining: jobRes ? jobRes.remainingPoints : this.jobLimiter.points,
             resetTime: jobRes ? new Date(Date.now() + jobRes.msBeforeNext).toISOString() : null
           }
         }
